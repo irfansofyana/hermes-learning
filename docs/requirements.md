@@ -97,7 +97,7 @@ Acceptance: due items, deferral, corrected assessments, and repeated requests be
 
 ## R7. Agent tools, skills, and interface transitions
 
-Provide descriptive English tools for exploration/learning-brief persistence, source recommendation status, track discovery/creation, learning context, source retrieval, activities, assistance, attempts, assessments, evidence, and review. Skills guide adaptive intent discovery, source selection/verification, source grounding, progressive hints, uncertainty, and saved checkpoints. Essential flows work without a visual widget.
+Provide descriptive English tools for exploration/learning-brief persistence, source recommendation status, track discovery/creation, learning context, source retrieval, activities, assistance, attempts, assessments, evidence, and review. Skills guide adaptive intent discovery, source selection/verification, source grounding, progressive hints, uncertainty, saved checkpoints, and default Humanizer editorial behavior under R11. Essential flows work without a visual widget.
 
 Tracked learning begins only through an explicit opt-in or resume action under R10. Generic phrases such as "help me learn this" and loading a teaching skill are not by themselves consent to persist learning records. Do not automatically mine or assess unrelated work or educational chats. A resume-context tool returns saved discovery context and unresolved choices when no track is approved; for active tracks it returns the approved brief, current objective, last attempt/assessment, open questions or misconception notes, current activity, and due reviews from server state. Only committed events count as saved progress; general agent memory is not an alternative authoritative learning database.
 
@@ -164,17 +164,39 @@ Acceptance:
 - Leave tracked learning, deliver a late submission using the old context, and verify rejection with no new learning records. Existing progress remains intact.
 - Read a workspace overview without starting/resuming a track: no enrollment, assessment, or learning-progress mutation occurs. UIs and messaging make the active tracking context visible when one is entered.
 
+## R11. Humanized teaching and editorial quality
+
+Bundle the Humanizer skill as a default part of the plugin's teaching-skill package, with teaching-specific guidance in [Teaching quality](teaching-quality.md). It must not depend on a skill installed only in the developer's Hermes profile. Confirm source/version, license, and required attribution before copying or redistributing the skill; packaging and actual activation remain implementation work. Applying editorial guidance is not consent to tracking under R10.
+
+Apply the guidance to discovery questions, explanations, materials recommendations, exercise wording, hints, assessment feedback, visual narration, and learning UI copy. When the plugin's teaching workflow is used in ad hoc chat, use the same quality standard without creating learning records. Do not globally rewrite unrelated Hermes work conversations.
+
+Teach directly and specifically. Explain the mechanism and assumptions at the learner's level, use examples that clarify the current question, and preserve relevant limits/counterexamples. Avoid canned praise, staged introductions, empty summaries, inflated claims, repeated template sections, unnecessary jargon, and ornamental formatting. Do not equate natural writing with casual slang, profanity, short answers, or omission of technical detail. Follow the learner's requested depth and language.
+
+Humanizing must not introduce facts or conceal uncertainty. Preserve quotations, citations, code, identifiers, commands, equations, units, numerical values, assumptions, and logical conditions. Label analogies and explain their limits. If evidence or understanding is missing, investigate or state the gap instead of producing smooth filler. A fluent rewrite is not source verification or educational validation.
+
+Use the skill in embedded mode: learners see the final explanation, not an editing draft or an AI-writing detector report. Begin with an author-side editorial check, not a mandatory second model/service pipeline or streaming postprocessor. Any later automated rewriting needs a separate decision on latency, cost, and factual preservation. The backend still validates durable state and structured payloads; style instructions are not a deterministic correctness guarantee.
+
+Practice is an explicit activity rather than a compulsory response after each explanation. Reading, discussing, and exploring can continue without submitting an answer. In a clear pending practice question, the learner's normal chat reply is the answer; UI uses an explicit submission action. The system reports persistence status, with no extra "confirm saved" step for the learner. Helpful direct answers must not be withheld merely to force a teaching template.
+
+Acceptance:
+- Distribute the plugin in a clean compatible Hermes profile with no preinstalled Humanizer; its documented teaching bundle includes the editorial guidance and its required attribution. Verify actual skill loading rather than assuming file presence implies use.
+- Exercise discovery, explanation, recommendation, hints, feedback, and visual narration in chat and saved workspace content. Review against the teaching-quality checklist with before/after examples; record subjective judgments as review outcomes, not an objective slop score.
+- Rewrite fixtures containing an equation, code identifier, units, quoted passage, citation, caveat, and incorrect learner reasoning. Preserve technical content and attribution; do not flatter the learner or hide the error.
+- Ask for a direct explanation with no practice: answer without a compulsory quiz/submission. In practice, submit once and show server-confirmed success or recovery without asking the learner to confirm the save.
+- Verify editorial guidance causes neither plugin writes in ad hoc mode nor changes to structured assessment data, source-sharing permissions, or active tracking context.
+
 ## Validation layers
 
 - Deterministic service tests: tracked-context mutation authorization and pause/revocation, fixed clock, evidence transitions, solution gating, policy enforcement, retry/conflict behavior, migrations, and malformed-data fixtures.
 - Adapter contract tests: HTTP and tools exercise the same state transitions and errors.
 - Scripted real-agent evaluations: ad hoc educational conversations with zero plugin writes, opt-in/promotion/exit and untracked side questions, vague-topic discovery, uncertain answers and early exit, skipped interviews for clear goals, reference-verification failures, explicit learning entry, verbatim relay, checkpoints, source-injection fixtures, and unrelated work chats. Report model/provider, failures, and observed reliability; these are not deterministic guarantees.
+- Teaching-quality review: Humanizer bundle/activation in a clean profile, representative tutoring outputs, factual-preservation fixtures, and natural practice/persistence UX; style is not a substitute for technical correctness.
 - Actual desktop/web/messaging checklist: rendering, auth, links, responsiveness, cross-client continuity, disconnect/reconnect, and persistence, recorded per tested release.
 
 ## Delivery stages
 
 1. Feasibility: explicit tracked opt-in with ad hoc zero-write and exit checks, real desktop and web diagram, real messaging tools, shared authenticated store, retry safety, assistance continuity, and restart recovery. No standalone mockup substitutes for these probes.
-2. First usable slice: ad hoc/tracked boundaries and explicit transitions, guided discovery from vague topics, both entry points, provisional briefs and source recommendations, curated sources, rubric-backed activities, controlled sequence visual, pending/self/agent assessments, evidence, simple review, and resume across all three interfaces. Frontend delivery may be sequenced but desktop remains required and tested.
+2. First usable slice: bundled Humanizer teaching guidance, ad hoc/tracked boundaries and explicit transitions, guided discovery from vague topics, both entry points, provisional briefs and source recommendations, curated sources, rubric-backed activities, controlled sequence visual, pending/self/agent assessments, evidence, simple review, and resume across all three interfaces. Frontend delivery may be sequenced but desktop remains required and tested.
 3. Extend ingestion and visual types after actual use. Add service-model operations only after their probe and a separate design decision.
 
 ## Out of scope

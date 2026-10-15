@@ -14,6 +14,7 @@ Help a technical learner understand concepts, inspect how other engineers apply 
 - Both source-first and goal-first entry points, with guided discovery for vague interests and complete beginners. The learner need not know the desired outcome or supply materials.
 - Books, papers, repositories, and practical projects are complementary sources.
 - Visualization and usable source navigation are core requirements.
+- Humanizer is required in the teaching-skill bundle. Explanations must be concrete, direct, and faithful to technical sources, without canned praise or filler.
 
 ## Proposed learning loop
 

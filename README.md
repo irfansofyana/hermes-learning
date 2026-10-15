@@ -17,6 +17,7 @@ This is a personal, single-user deployment. Public source code does not imply pu
 - [Draft requirements](docs/requirements.md)
 - [Learner flows, including discovery](docs/user-flows.md)
 - [Product brief](docs/product-brief.md)
+- [Teaching quality and Humanizer integration](docs/teaching-quality.md)
 - [Architecture proposal](docs/architecture.md)
 - [Related projects](docs/research/related-projects.md)
 - [DeepTutor study](docs/research/deeptutor-study.md)
