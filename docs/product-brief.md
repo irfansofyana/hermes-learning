@@ -17,7 +17,7 @@ Help a technical learner understand concepts, inspect how other engineers apply 
 
 ## Proposed learning loop
 
-Agree on an objective, inspect a source, explain or predict, experiment or implement, record evidence, and revisit later. Allow the learner to request a direct explanation or change direction. Teaching order is configurable per activity; no default teaching preference has been selected.
+Agree on an objective, inspect a source, explain or predict, experiment or implement, record evidence, and revisit later. Allow the learner to request a direct explanation or change direction. Teaching order is configurable per activity; no default teaching preference has been selected. Assessable activities have criteria before attempts. Preserve assistance events and answer provenance; UI submissions can await later assessment.
 
 ## Success
 

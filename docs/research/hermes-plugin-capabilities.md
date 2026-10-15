@@ -17,7 +17,7 @@ Desktop disk plugins load plain ESM and restrict imports to the SDK and supporte
 
 ## Proposed visualization approach
 
-Render validated structured data with controlled SVG/HTML components. Start with one step-through sequence diagram. Do not assume Mermaid, React Flow, D3, or arbitrary npm imports work unchanged. Native SVG feasibility follows from the React rendering surface; our concrete implementation still needs to be exercised in both hosts.
+Render validated structured data through controlled SVG/HTML components; do not accept executable model-provided markup. Start with one step-through sequence diagram. Do not assume Mermaid, React Flow, D3, or arbitrary npm imports work unchanged. SVG feasibility is an inference from the rendering surface, not a runtime result; the actual component must be exercised in both hosts.
 
 ## Constraints and probes
 

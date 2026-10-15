@@ -1,27 +1,33 @@
-# Cross-client visualization spike
+# Cross-client learning and visualization spike
 
-Status: proposed; not executed. Installing test plugins or restarting host services requires separate approval.
+Status: proposed, not executed. Installation and restarts require separate approval. This spike tests actual host integrations, not a standalone mockup.
 
-## Question
+## Scenario
 
-Can real desktop and web Hermes plugins display the same interactive learning artifact and share saved attempts with an agent tool on the deployed backend?
+One permitted curated excerpt about retries/idempotency, an approved objective, one versioned rubric-backed prediction activity, and one structured sequence visual. Agent tools and authenticated desktop/web APIs access the same backend store. No backend model calls are needed: use authored fixtures and real chat-agent tool calls.
 
-## Probe
+## Required probes
 
-Use one authored lesson on retry/idempotency with a permitted short source excerpt. Store its structured sequence diagram on the backend. Provide Previous/Next controls, source references, a text alternative, and a single prediction question. Submit an answer through one client or agent tool, then read it from the other interfaces.
+| Probe | Pass evidence |
+| --- | --- |
+| Shared store | Actual HTTP and tool contexts report the same store identity and data; parallel writes and concurrent initialization succeed. |
+| Authentication | Unauthenticated GET/POST fail on direct and configured proxy routes; valid clients work without credentials embedded in links. |
+| Desktop and web visual | Actual host plugins render the same structured visual; keyboard steps, resizing, themes, text alternatives, and malformed-payload errors work. Record what frontend code cannot be shared. |
+| Messaging | Select a concrete channel before execution. Registered tools can resume, retrieve safe text, record assistance, and submit an attempt. |
+| Continuity | Ask for a hint in chat, close it, answer in web, and inspect preserved assistance/attempt in desktop and a fresh chat. |
+| Assessment | UI submission remains pending without chat; self-check and later agent assessment remain separately attributable. Criteria predate the attempt and normal retrieval hides the key. |
+| Retry/recovery | Retry the server-issued submission ID after a simulated lost response; one attempt persists. New identity permits an intentional identical answer. Restart with approval and read back records. |
+| Navigation and interruption | Workspace URL opens the correct activity. Copyable resume prompt works. Local draft survives reload as unsubmitted; stale/offline state is visible. |
+| Agent reliability | Exercise explicit entry, saved checkpoints, verbatim relay, unrelated work chat, and source-injection fixtures. Record failures and provider/model rather than claim perfect reliability. |
 
-## Pass criteria
+## Optional probes
 
-- Load actual desktop and dashboard plugins without app-core edits.
-- Authenticated plugin GET and POST reach the correct deployment/profile.
-- Tools and UI use the same persistent service/store across host module boundaries.
-- Diagram controls work in both clients, including resize and keyboard operation.
-- Save an attempt in chat and observe it in desktop and web after refresh.
-- Repeat a submission with the same key; store one attempt.
-- Restart the backend with approval; persisted state remains readable.
-- Show failure/offline status instead of a false saved state.
-- Report installed Hermes versions, artifacts, commands, and observed failures.
+Raw-user-message hooks and correlation, native desktop deep links, and backend model access/retry/cost behavior. Failure here must not silently substitute unverified behavior into the first slice.
+
+## Report
+
+Record tested host versions, deployment topology without secrets, commands, screenshots/artifacts, assertions, observed failures, and unsupported assumptions. Desktop and web both remain required even if probes run in sequence. A failed host boundary is a reported blocker, not proof from a browser demo.
 
 ## Exclusions
 
-Full document ingestion, model-generated code, production deployment, complete curriculum UI, and committing throwaway code as a finished plugin. Report findings before deciding what to retain.
+Full document parsing, arbitrary generated code, production rollout, complete curriculum UI, and retaining throwaway code as a finished implementation without review.
