@@ -4,7 +4,7 @@ A personal learning workspace for Hermes Agent: source-grounded study, interacti
 
 **Status: research and requirements draft. No runnable plugin exists yet.**
 
-Start with a vague curiosity, a concrete goal, or a source. The agent helps clarify your direction and recommend starting materials. Learn concepts through books and papers, investigate them in real repositories, and apply them in projects. Keep conceptual understanding separate from implementation success and record how much assistance an activity required.
+Ordinary educational chat stays ad hoc by default. Explicitly start or resume tracked learning when you want a continuing record. Start with a vague curiosity, a concrete goal, or a source. The agent helps clarify your direction and recommend starting materials. Learn concepts through books and papers, investigate them in real repositories, and apply them in projects. Keep conceptual understanding separate from implementation success and record how much assistance an activity required.
 
 ## Intended architecture
 
@@ -23,6 +23,7 @@ This is a personal, single-user deployment. Public source code does not imply pu
 - [Hermes extension research](docs/research/hermes-plugin-capabilities.md)
 - [Backend state decision](docs/decisions/001-backend-owned-learning-state.md)
 - [Interface decision](docs/decisions/002-desktop-web-and-chat-interfaces.md)
+- [Explicit tracking opt-in decision](docs/decisions/003-explicit-tracking-opt-in.md)
 - [Feasibility spike](docs/feasibility/cross-client-visualization-spike.md)
 
 Requirements and architecture require review before implementation. Documented host capabilities are not a runtime compatibility guarantee. Do not upload copyrighted books, personal records, deployment secrets, or credentials to this repository.

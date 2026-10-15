@@ -4,7 +4,7 @@ Status: revised draft for user review. Documentation changes do not authorize pr
 
 ## Goal and scope
 
-A personal learning system inside Hermes that connects conceptual foundations from books/papers to repository investigation and hands-on projects. Desktop, web, and ordinary agent chat share server-owned learning state. Use one canonical deployment/profile. Both goal-first and source-first entry are required, including vague-topic discovery when the learner has neither a concrete outcome nor a source. Visualization and usable source navigation are core.
+A personal learning system inside Hermes that connects conceptual foundations from books/papers to repository investigation and hands-on projects. Desktop, web, and ordinary agent chat share server-owned learning state. Use one canonical deployment/profile. Both goal-first and source-first entry are required, including vague-topic discovery when the learner has neither a concrete outcome nor a source. Visualization and usable source navigation are core. Ordinary educational chat remains ad hoc by default; plugin-owned persistence requires the explicit opt-in defined in R10.
 
 ## R0. Content authorship and assessment ownership
 
@@ -28,7 +28,7 @@ Allow "suggest a starting point" at any time. The agent then proposes a small re
 
 Summarize the learner's interest, reason for learning, stated background and unknowns, a first useful outcome, constraints actually expressed, and tentative prerequisites. Separate learner statements from agent assumptions. Invite correction, then propose a small path and starting materials under R2 for approval. For source-first, curated excerpts plus metadata are sufficient initially; automatic whole-book analysis is not required. An exploratory activity can be approved without committing to a full track.
 
-Save discovery notes, unresolved choices, recommendation status, and approval state in a backend-owned exploration record that can later link to a track. It can resume across chats/clients before a track exists. The UIs distinguish `exploring`, `path proposed`, and `active learning`; these are product states, not assumed host SDK features. A learner's explicit agreement is needed before treating a proposed direction as approved.
+Only after opting into tracked learning under R10, save discovery notes, unresolved choices, recommendation status, and approval state in a backend-owned exploration record that can later link to a track. Before opt-in, discovery can happen in ordinary chat without plugin writes. It can resume across chats/clients before a track exists. The UIs distinguish `exploring`, `path proposed`, and `active learning`; these are product states, not assumed host SDK features. A learner's explicit agreement is needed before treating a proposed direction as approved.
 
 After the first activity, check whether the direction matches the learner's interest. Permit scope changes without erasing discovery or earlier evidence. Allow revision, pausing, and explicit archiving. Persist current objective, activity, and next action independently of any chat session.
 
@@ -36,7 +36,7 @@ Acceptance:
 - Start with a broad topic and no knowledge/source. The agent asks an intent question, uses the answer, explains options when needed, and proposes a small brief, materials, and first activity for approval.
 - Reply "I don't know" and then "suggest a starting point." The agent offers a reversible default with labeled assumptions rather than repeating the questionnaire or claiming the learner approved it.
 - Start with a precise goal or source; skip unnecessary discovery while retaining path approval.
-- Pause discovery in chat A and resume its saved record in chat B and desktop/web without inventing missing answers.
+- After explicit opt-in, pause discovery in chat A and resume its saved record in chat B and desktop/web without inventing missing answers. Without opt-in, the same discovery creates no plugin exploration, recommendation, or progress record.
 - Complete an exploratory activity, reject its direction, and revise the brief without losing prior evidence or treating the exploration as failed mastery.
 
 ## R2. Source discovery, grounding, and disclosure
@@ -47,7 +47,7 @@ The learner need not supply materials. Using the provisional brief, the agent pr
 
 Verify proposed references and relevant access information through available retrieval tools before marking them verified: title/author or repository identity, edition/commit when relevant, working source link, and whether the relevant content is publicly accessible, paid, or not yet checked. Record provenance and verification status. If a tool or source is unavailable, disclose the limitation, keep the candidate unverified, and offer a usable alternative. Do not invent chapter numbers, quotations, access claims, or a reading assignment from metadata alone; a specific passage assignment requires inspected content or a learner-provided locator clearly labeled as such.
 
-Recommendations remain candidates until the learner accepts or substitutes them. Recommending a book does not purchase, download, attach full text, or grant model-sharing consent. Material discovery can run in chat with host research tools; it does not require a new backend search service or service-side inference. UIs show the saved brief and recommendations and provide the chat handoff when no generation path is available. Guided discovery and source recommendation are required in the first usable slice, while automatic full-document ingestion remains deferred.
+Recommendations remain candidates until the learner accepts or substitutes them. Recommending a book does not purchase, download, attach full text, or grant model-sharing consent. Material discovery can run in chat with host research tools; it does not require a new backend search service or service-side inference. In ad hoc chat, recommend materials without persisting plugin candidates or attaching sources. In an opted-in context, UIs show the saved brief and recommendations and provide the chat handoff when no generation path is available. Guided discovery and source recommendation are required in the first usable slice, while automatic full-document ingestion remains deferred.
 
 ### Ground and protect attached material
 
@@ -63,7 +63,7 @@ Acceptance: a vague-topic learner receives a short ordered source recommendation
 
 Support explanation, prediction, source/code tracing, and small practical tasks connecting concepts to implementation. The first reusable activity templates are explanation, prediction, and trace; build tasks can be briefs completed outside the plugin with submitted artifacts/reflections. Imported code is never executed automatically.
 
-Let the learner choose explain-first or attempt-first per activity; no personal default is established. Provide progressive help and explicit reveal controls. Record assistance as events when delivered: none, nudge, targeted-hint, worked-step, full-solution-shown. Reading a source is a separate context flag, not automatically a penalty. Agent-generated help must be checkpointed before being represented as durably recorded; uncertainty in capture stays visible.
+These recording and assessment rules apply within opted-in tracked contexts. A direct question or untracked side question must not become an attempt merely because its topic matches a track. Let the learner choose explain-first or attempt-first per activity; no personal default is established. Provide progressive help and explicit reveal controls. Record assistance as events when delivered: none, nudge, targeted-hint, worked-step, full-solution-shown. Reading a source is a separate context flag, not automatically a penalty. Agent-generated help must be checkpointed before being represented as durably recorded; uncertainty in capture stays visible.
 
 Acceptance: request a hint in chat, close it, submit in web, and observe that the assistance history persists. A practical activity includes a conceptual question and practical evidence without treating either as proof of the other.
 
@@ -99,7 +99,7 @@ Acceptance: due items, deferral, corrected assessments, and repeated requests be
 
 Provide descriptive English tools for exploration/learning-brief persistence, source recommendation status, track discovery/creation, learning context, source retrieval, activities, assistance, attempts, assessments, evidence, and review. Skills guide adaptive intent discovery, source selection/verification, source grounding, progressive hints, uncertainty, and saved checkpoints. Essential flows work without a visual widget.
 
-Learning begins on an explicit request, skill invocation, or workspace action. Do not automatically mine or assess unrelated work chats. A resume-context tool returns saved discovery context and unresolved choices when no track is approved; for active tracks it returns the approved brief, current objective, last attempt/assessment, open questions or misconception notes, current activity, and due reviews from server state. Only committed events count as saved progress; general agent memory is not an alternative authoritative learning database.
+Tracked learning begins only through an explicit opt-in or resume action under R10. Generic phrases such as "help me learn this" and loading a teaching skill are not by themselves consent to persist learning records. Do not automatically mine or assess unrelated work or educational chats. A resume-context tool returns saved discovery context and unresolved choices when no track is approved; for active tracks it returns the approved brief, current objective, last attempt/assessment, open questions or misconception notes, current activity, and due reviews from server state. Only committed events count as saved progress; general agent memory is not an alternative authoritative learning database.
 
 Tool results include stable exploration IDs before track creation and track/activity IDs when available, text equivalents, and an authenticated workspace URL when a public base URL is configured; never include credentials in links. Workspace provides a copyable resume prompt. Native desktop deep linking is optional until verified.
 
@@ -129,17 +129,52 @@ Provide export and consistent SQLite/artifact backup/restore. Archiving retains 
 
 Acceptance: unauthorized GET/POST and malicious artifact paths fail. Source-injection fixtures cannot bypass mutation validation or confirmation. Incompatible clients refuse unsafe writes. Backup/restore recovers a track, evidence, and referenced artifacts. Host restart preserves committed state.
 
+## R10. Ad hoc by default; explicit tracked-learning opt-in
+
+### Decide by persistence intent, not subject or depth
+
+Ordinary chat is ad hoc unless the learner explicitly starts or resumes tracked learning. Explain concepts, discuss papers, offer discovery questions, and provide useful visuals without requiring enrollment. A long educational discussion, learning-related vocabulary, a source upload, topic similarity to an existing track, installing/loading a plugin or skill, or merely opening a workspace does not authorize learning-record writes.
+
+In ad hoc mode, create no plugin explorations, briefs, candidate materials, source attachments, attempts, assessments, objectives, or reviews; do not automatically fetch a matching personal track to personalize the answer. This restriction concerns plugin-owned state. Normal Hermes history, files created at the learner's request, provider processing, and host retention are separate and must not be described as private/incognito or unsaved everywhere. Plugin diagnostics must not covertly store ad hoc content as learning data.
+
+Do not ask "ad hoc or tracked?" before every educational answer. Answer the question first unless clarification is necessary to help. At a natural transition toward ongoing study, an optional single offer can explain the benefits of saving a track. After a decline, suppress further unsolicited offers in that conversation unless the learner reopens the topic of tracking. Offering or declining creates no plugin learning record.
+
+### Enter and promote explicitly
+
+An explicit "start/save this as a learning track," "continue my named track," or a clearly labeled Start tracked learning/Resume action can authorize entry. Ambiguous requests remain ad hoc; clarify before writes when the learner appears to want saved progress. A specifically labeled skill command may be an entry action only if its tracking behavior is explained; automatic skill selection is not consent.
+
+For ad hoc-to-tracked promotion, show a proposed brief and the selected context/materials to import, and obtain approval for that import. Do not copy the full conversation automatically or retrospectively grade it. Mark imported notes as prior discussion, not independent learning evidence. If the learner explicitly starts a new tracked exploration with no prior import, do not require a redundant second enrollment confirmation. Tracking consent, importing earlier content, approving a learning path, and model-sharing consent are separate scopes.
+
+Bind entry to a stable store/profile, exploration/track, and conversation or explicit workspace activity context. Display the active context in desktop/web and announce entry/resume in messaging. Membership is not global across all chats. Another chat begins ad hoc unless explicitly resumed there. Opening an overview reads existing records but does not activate tracking for unrelated conversations.
+
+### Side questions, pause, and exit
+
+Within a tracked context, an explicit answer to the pending tracked activity may be recorded under its agreed workflow. A side question does not automatically change objectives, create an attempt, or earn assessment evidence. "Just explain this; don't track it" suspends learning-record updates for the exchange. If it is unclear whether text is an activity answer or a side discussion, clarify before saving it as evidence.
+
+Provide Leave tracked learning in desktop/web and an equivalent natural-language action in chat. Leaving stops new recording in that context without deleting/archiving the track. Do not automatically resume recording after an untracked exchange; announce and obtain an explicit resume action. Preserve already committed data; do not claim leaving retracts it. Other deliberately active workspace contexts remain independent and clearly labeled.
+
+Mutating tools/API handlers require a valid active tracking context created by an explicit entry action. Pause/exit invalidates that context for future writes, including late or queued submissions. Return a recoverable status and preserve committed data; never silently reactivate. Resolve the host mechanism for identifying user-authorized entry in the feasibility probe. A model-supplied boolean alone is insufficient proof; do not claim prompt instructions guarantee opt-in enforcement. A request to view a saved record is not consent to modify it.
+
+Acceptance:
+- Ask a concept question, discuss a paper, and run a long vague-topic discovery chat without opting in. Receive useful answers with no plugin learning-record writes and no automatic personal-track lookup.
+- Decline a tracking offer, then ask more educational questions: no repeated unsolicited offer in that conversation and no persisted exploration.
+- Promote selected ad hoc context after a preview: only approved context is imported, and no earlier text becomes an assessed attempt.
+- Start an explicitly tracked exploration: persistence begins without a duplicate enrollment prompt, while path approval remains a separate step.
+- While answering a tracked activity, ask an untracked side question. It creates no attempt or objective update; resume is explicit. A fresh unrelated chat remains ad hoc.
+- Leave tracked learning, deliver a late submission using the old context, and verify rejection with no new learning records. Existing progress remains intact.
+- Read a workspace overview without starting/resuming a track: no enrollment, assessment, or learning-progress mutation occurs. UIs and messaging make the active tracking context visible when one is entered.
+
 ## Validation layers
 
-- Deterministic service tests: fixed clock, evidence transitions, solution gating, policy enforcement, retry/conflict behavior, migrations, and malformed-data fixtures.
+- Deterministic service tests: tracked-context mutation authorization and pause/revocation, fixed clock, evidence transitions, solution gating, policy enforcement, retry/conflict behavior, migrations, and malformed-data fixtures.
 - Adapter contract tests: HTTP and tools exercise the same state transitions and errors.
-- Scripted real-agent evaluations: vague-topic discovery, uncertain answers and early exit, skipped interviews for clear goals, reference-verification failures, explicit learning entry, verbatim relay, checkpoints, source-injection fixtures, and unrelated work chats. Report model/provider, failures, and observed reliability; these are not deterministic guarantees.
+- Scripted real-agent evaluations: ad hoc educational conversations with zero plugin writes, opt-in/promotion/exit and untracked side questions, vague-topic discovery, uncertain answers and early exit, skipped interviews for clear goals, reference-verification failures, explicit learning entry, verbatim relay, checkpoints, source-injection fixtures, and unrelated work chats. Report model/provider, failures, and observed reliability; these are not deterministic guarantees.
 - Actual desktop/web/messaging checklist: rendering, auth, links, responsiveness, cross-client continuity, disconnect/reconnect, and persistence, recorded per tested release.
 
 ## Delivery stages
 
-1. Feasibility: real desktop and web diagram, real messaging tools, shared authenticated store, retry safety, assistance continuity, and restart recovery. No standalone mockup substitutes for these probes.
-2. First usable slice: guided discovery from vague topics, both entry points, provisional briefs and source recommendations, curated sources, rubric-backed activities, controlled sequence visual, pending/self/agent assessments, evidence, simple review, and resume across all three interfaces. Frontend delivery may be sequenced but desktop remains required and tested.
+1. Feasibility: explicit tracked opt-in with ad hoc zero-write and exit checks, real desktop and web diagram, real messaging tools, shared authenticated store, retry safety, assistance continuity, and restart recovery. No standalone mockup substitutes for these probes.
+2. First usable slice: ad hoc/tracked boundaries and explicit transitions, guided discovery from vague topics, both entry points, provisional briefs and source recommendations, curated sources, rubric-backed activities, controlled sequence visual, pending/self/agent assessments, evidence, simple review, and resume across all three interfaces. Frontend delivery may be sequenced but desktop remains required and tested.
 3. Extend ingestion and visual types after actual use. Add service-model operations only after their probe and a separate design decision.
 
 ## Out of scope

@@ -10,6 +10,7 @@ One permitted curated excerpt about retries/idempotency, an approved objective, 
 
 | Probe | Pass evidence |
 | --- | --- |
+| Opt-in boundary | Educational ad hoc chat and declined offers produce no plugin writes or automatic personal-track lookup. Explicit entry enables scoped persistence; selected-context promotion requires approval. Exit rejects late writes and leaves committed records intact. Opening an overview does not enroll. Prove the host entry mechanism rather than trust a model boolean. |
 | Shared store | Actual HTTP and tool contexts report the same store identity and data; parallel writes and concurrent initialization succeed. |
 | Authentication | Unauthenticated GET/POST fail on direct and configured proxy routes; valid clients work without credentials embedded in links. |
 | Desktop and web visual | Actual host plugins render the same structured visual; keyboard steps, resizing, themes, text alternatives, and malformed-payload errors work. Record what frontend code cannot be shared. |
@@ -19,7 +20,7 @@ One permitted curated excerpt about retries/idempotency, an approved objective, 
 | Retry/recovery | Retry the server-issued submission ID after a simulated lost response; one attempt persists. New identity permits an intentional identical answer. Restart with approval and read back records. |
 | Navigation and interruption | Workspace URL opens the correct activity. Copyable resume prompt works. Local draft survives reload as unsubmitted; stale/offline state is visible. |
 | Agent reliability | Exercise explicit entry, saved checkpoints, verbatim relay, unrelated work chat, and source-injection fixtures. Record failures and provider/model rather than claim perfect reliability. |
-| Discovery and materials | Run a broad-topic/no-knowledge chat with an "I do not know" response and "suggest a starting point" exit. Save an unapproved brief, resume it in another client, propose a small verified or explicitly unverified source set, and require approval before activation. A failed reference lookup must not produce a fabricated citation. |
+| Discovery and materials | Run a broad-topic/no-knowledge chat with an "I do not know" response and "suggest a starting point" exit. After explicit persistence opt-in, save a path-unapproved brief, resume it explicitly in another client, propose a small verified or explicitly unverified source set, and require approval before activation. A failed reference lookup must not produce a fabricated citation. |
 
 ## Optional probes
 
