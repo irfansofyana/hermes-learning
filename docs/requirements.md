@@ -205,6 +205,6 @@ Multi-user accounts/roles, classrooms, billing, offline write synchronization, c
 
 ## Decisions still needed
 
-Before implementation: choose messaging runtime for the probe; specify the first scheduling policy and payload limits; prove host registration/auth/storage/rendering; establish confirmation mechanics. These are technical/specification choices, not permission to guess unsupported APIs.
+Before the spike: no additional product or messaging-channel decision is required. Use an isolated local test environment and the easiest available checks, with manual testing accepted. Investigate host registration/auth/storage/rendering and confirmation mechanics as spike questions. Keep scheduling out of the minimal probe; specify scheduling policy and production payload limits before the first usable release. These are engineering choices and feasibility findings, not questions to repeatedly return to the learner. Changes or restarts affecting the daily Hermes installation still require separate approval.
 
 Before release: supported host/client versions, license, source/draft retention and storage limits, export format, and deletion behavior. Explain-first versus attempt-first remains selectable per activity; a personal default is optional. PDF parsing and code execution are deferred, not prerequisites.
