@@ -6,6 +6,12 @@ Status: proposed, not executed. Installation and restarts require separate appro
 
 One permitted curated excerpt about retries/idempotency, an approved objective, one versioned rubric-backed prediction activity, and one structured sequence visual. Agent tools and authenticated desktop/web APIs access the same backend store. No backend model calls are needed: use authored fixtures and real chat-agent tool calls.
 
+## Lightweight execution policy
+
+Use the easiest available test path; choosing a particular messaging platform is not a blocker or a product-support decision. The learning core remains channel-independent. Use a few automated checks for persistence, explicit tracking opt-in/exit, and retry safety. Verify actual desktop/web behavior manually, and provide the learner a short manual messaging/cross-client checklist. No comprehensive per-channel automation, benchmark framework, coverage target, or new testing infrastructure is required for this throwaway spike.
+
+Record which checks were actually exercised and which remain manual/unverified. Manual testing is acceptable evidence when its steps and observed results are recorded. Do not claim all messaging channels work because one did. Continue to require separate approval before changing or restarting the daily Hermes installation.
+
 ## Required probes
 
 | Probe | Pass evidence |
@@ -14,7 +20,7 @@ One permitted curated excerpt about retries/idempotency, an approved objective, 
 | Shared store | Actual HTTP and tool contexts report the same store identity and data; parallel writes and concurrent initialization succeed. |
 | Authentication | Unauthenticated GET/POST fail on direct and configured proxy routes; valid clients work without credentials embedded in links. |
 | Desktop and web visual | Actual host plugins render the same structured visual; keyboard steps, resizing, themes, text alternatives, and malformed-payload errors work. Record what frontend code cannot be shared. |
-| Messaging | Select a concrete channel before execution. Registered tools can resume, retrieve safe text, record assistance, and submit an attempt. |
+| Messaging | Use an available convenient channel, or let the learner manually check their channels. No platform selection blocks building the spike. Verify tools can resume, retrieve safe text, record assistance, and submit; record only channels actually tested. |
 | Continuity | Ask for a hint in chat, close it, answer in web, and inspect preserved assistance/attempt in desktop and a fresh chat. |
 | Assessment | UI submission remains pending without chat; self-check and later agent assessment remain separately attributable. Criteria predate the attempt and normal retrieval hides the key. |
 | Retry/recovery | Retry the server-issued submission ID after a simulated lost response; one attempt persists. New identity permits an intentional identical answer. Restart with approval and read back records. |
