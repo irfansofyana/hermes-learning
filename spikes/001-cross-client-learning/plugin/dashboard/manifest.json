@@ -1,0 +1,14 @@
+{
+  "name": "hermes-learning-spike",
+  "label": "Learning spike",
+  "description": "Disposable cross-client learning spike. Read-only by default; optional predictions await assessment. No model calls.",
+  "icon": "Activity",
+  "version": "0.0.1",
+  "tab": {
+    "path": "/learning-spike",
+    "position": "end",
+    "hidden": false
+  },
+  "entry": "dist/index.js",
+  "api": "plugin_api.py"
+}

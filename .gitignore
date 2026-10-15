@@ -14,4 +14,10 @@ __pycache__/
 .venv/
 node_modules/
 dist/
+# This spike ships a hand-authored dashboard IIFE, not generated build output.
+!spikes/001-cross-client-learning/plugin/dashboard/dist/
+!spikes/001-cross-client-learning/plugin/dashboard/dist/index.js
 .DS_Store
+# Private isolated test runtime; the default runner stores it outside this repo.
+/spike-runtime/
+**/session-token

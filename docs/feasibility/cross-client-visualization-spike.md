@@ -1,6 +1,6 @@
 # Cross-client learning and visualization spike
 
-Status: proposed, not executed. Installation and restarts require separate approval. This spike tests actual host integrations, not a standalone mockup.
+Status: an isolated disposable implementation is available in [the spike directory](../../spikes/001-cross-client-learning/README.md), with [recorded evidence and remaining limits](../../spikes/001-cross-client-learning/results/README.md). This does not authorize installation or restarts of the daily Hermes instance. Actual host integration is distinguished from adapter-only checks.
 
 ## Scenario
 

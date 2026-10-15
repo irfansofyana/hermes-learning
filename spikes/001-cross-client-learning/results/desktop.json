@@ -1,0 +1,14 @@
+{
+  "realElectron": true,
+  "readOnly": true,
+  "navigation": "Step 2 visible",
+  "stateUnchanged": true,
+  "storeId": "10cccc09-ad51-4520-8d29-08c3702a0178",
+  "contexts": 4,
+  "attempts": 7,
+  "alerts": [],
+  "desktop_adapter_sha256": "2b94215de9c7fa2dcfa41a551f506320957e4b85548da5b7e24faea2c41df7ff",
+  "cleanup": {
+    "owned_group_live_survivors": []
+  }
+}

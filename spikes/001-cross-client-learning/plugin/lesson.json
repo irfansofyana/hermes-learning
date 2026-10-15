@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "title": "When the response disappears",
+  "objective": "Distinguish a client timeout from a server-side effect, then reason about retries.",
+  "source": {
+    "title": "Authored spike scenario, not an extracted paper",
+    "text": "A client sends a request that changes stored data. The service completes the write, but the response is lost. The client sees a timeout. Assume no automatic rollback and no duplicate-request protection in the first version."
+  },
+  "participants": [
+    {
+      "id": "client",
+      "label": "Client"
+    },
+    {
+      "id": "service",
+      "label": "Service"
+    },
+    {
+      "id": "database",
+      "label": "Database"
+    }
+  ],
+  "steps": [
+    {
+      "from": "client",
+      "to": "service",
+      "label": "Send request",
+      "explanation": "The client asks the service to change stored data."
+    },
+    {
+      "from": "service",
+      "to": "database",
+      "label": "Apply write",
+      "explanation": "The database commits the change."
+    },
+    {
+      "from": "database",
+      "to": "service",
+      "label": "Write completed",
+      "explanation": "The service knows the write completed."
+    },
+    {
+      "from": "service",
+      "to": "client",
+      "label": "Response lost",
+      "explanation": "The reply does not reach the client. The client times out."
+    },
+    {
+      "from": "client",
+      "to": "service",
+      "label": "Retry request",
+      "explanation": "The client sends the request again. Pause and predict its effect."
+    }
+  ],
+  "prompt": "The client retries after the timeout. What can happen to the stored data, and what would a correctly implemented idempotency mechanism change?"
+}

@@ -1,0 +1,16 @@
+{
+  "python_tests_passed": 10,
+  "ui_recovery_checks_passed": 6,
+  "actual_http_registry_checks_passed": 10,
+  "restart_exact_state_preserved": true,
+  "attempts_preserved_at_final_restart": 5,
+  "relative_source_prepare_serve_and_tools_verified": true,
+  "real_web_other_client_run_refresh_recovered": true,
+  "real_web_lost_submission_response_after_server_commit_injected": true,
+  "real_web_exact_readback_cleared_uncertain_delivery": true,
+  "real_web_submission_used_refreshed_run": true,
+  "real_web_exit_retained_exactly_one_recovery_attempt": true,
+  "all_fixture_contexts_exited": true,
+  "dashboard_adapter_sha256": "9136c089212df0b4d94c9da99ccc2f42ccb2fd7aff563e9d473226978d59dc72",
+  "fresh_venv_with_declared_api_dependencies_python_tests_passed": 10
+}

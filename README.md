@@ -2,7 +2,9 @@
 
 A personal learning workspace for Hermes Agent: source-grounded study, interactive visualizations, and practice across desktop, web, and chat.
 
-**Status: research and requirements draft. No runnable plugin exists yet.**
+**Status: requirements draft plus a runnable isolated spike, not a production plugin.**
+
+Start with [the spike instructions and observed results](spikes/001-cross-client-learning/README.md). The real web/backend flow, registered tools, and isolated Electron rendering/navigation have been exercised. Desktop write flows and messaging remain manual checks.
 
 Ordinary educational chat stays ad hoc by default. Explicitly start or resume tracked learning when you want a continuing record. Start with a vague curiosity, a concrete goal, or a source. The agent helps clarify your direction and recommend starting materials. Learn concepts through books and papers, investigate them in real repositories, and apply them in projects. Keep conceptual understanding separate from implementation success and record how much assistance an activity required.
 
@@ -27,4 +29,4 @@ This is a personal, single-user deployment. Public source code does not imply pu
 - [Explicit tracking opt-in decision](docs/decisions/003-explicit-tracking-opt-in.md)
 - [Feasibility spike](docs/feasibility/cross-client-visualization-spike.md)
 
-Requirements and architecture require review before implementation. Documented host capabilities are not a runtime compatibility guarantee. Do not upload copyrighted books, personal records, deployment secrets, or credentials to this repository.
+The spike does not implement the full requirements. Documented host capabilities are not a runtime compatibility guarantee. Do not upload copyrighted books, personal records, deployment secrets, or credentials to this repository.

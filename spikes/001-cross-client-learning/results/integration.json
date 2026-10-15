@@ -1,0 +1,17 @@
+{
+  "passed": 10,
+  "checks": [
+    "host authentication rejects unauthenticated GET/POST",
+    "HTTP and real registry reject context-free writes",
+    "real tool returns authored lesson without enrollment or solution key",
+    "registered slash command and HTTP share the same store",
+    "tool hint survives HTTP answer submission; assessment remains pending",
+    "cross-adapter retry returns same attempt and changed payload conflicts",
+    "new server-issued run permits intentional identical answers",
+    "exit revokes later tool writes without deleting committed attempts",
+    "real loader registers five tools, a command, and bundled teach/humanizer skills",
+    "real dashboard discovers the frontend plugin"
+  ],
+  "store_id": "10cccc09-ad51-4520-8d29-08c3702a0178",
+  "attempts_in_store": 7
+}

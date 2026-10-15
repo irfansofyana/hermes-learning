@@ -1,6 +1,6 @@
 # Teaching quality and Humanizer integration
 
-Status: required product direction; packaging/activation is not implemented. R11 owns acceptance. The existing Humanizer skill is the intended editorial dependency, with teaching-specific behavior below. No runtime plugin has been installed by adding this document.
+Status: required product direction. The isolated spike bundles an original Humanizer-compatible teaching adaptation; host registration and skill retrieval are exercised, while model adherence remains unevaluated. R11 owns release acceptance. No daily/production installation is implied by this document.
 
 ## Integration contract
 
