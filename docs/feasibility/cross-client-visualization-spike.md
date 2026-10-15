@@ -19,6 +19,7 @@ One permitted curated excerpt about retries/idempotency, an approved objective, 
 | Retry/recovery | Retry the server-issued submission ID after a simulated lost response; one attempt persists. New identity permits an intentional identical answer. Restart with approval and read back records. |
 | Navigation and interruption | Workspace URL opens the correct activity. Copyable resume prompt works. Local draft survives reload as unsubmitted; stale/offline state is visible. |
 | Agent reliability | Exercise explicit entry, saved checkpoints, verbatim relay, unrelated work chat, and source-injection fixtures. Record failures and provider/model rather than claim perfect reliability. |
+| Discovery and materials | Run a broad-topic/no-knowledge chat with an "I do not know" response and "suggest a starting point" exit. Save an unapproved brief, resume it in another client, propose a small verified or explicitly unverified source set, and require approval before activation. A failed reference lookup must not produce a fabricated citation. |
 
 ## Optional probes
 

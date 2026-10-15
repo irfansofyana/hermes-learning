@@ -15,7 +15,7 @@ The learning service validates authoring, evidence, assistance events, review po
 
 Activities have immutable assessed versions and pre-attempt criteria. Agent-authored and learner-authored content are attributable. UI answers commit as awaiting assessment without a live chat. Self-assessment and agent review are separate records. Backend model inference is deferred pending a host-inference probe; the UI must explain chat handoffs.
 
-Candidate entities: Track, Objective, Source, SourceLocator, ActivityVersion, ActivityRun, AssistanceEvent, Attempt, Assessment, ReviewItem, Visualization, Artifact. Misconception/open-question notes attach to objectives. Durable session references are optional provenance, not the resume mechanism.
+Candidate entities: Exploration/LearningBrief, SourceRecommendation, Track, Objective, Source, SourceLocator, ActivityVersion, ActivityRun, AssistanceEvent, Attempt, Assessment, ReviewItem, Visualization, Artifact. An exploration can exist before any approved track; it stores learner-stated interests, assumptions, unresolved choices, candidate directions/materials, and approval status. Accepted recommendations are not automatically downloaded or authorized for model sharing. Misconception/open-question notes attach to objectives. Durable session references are optional provenance, not the resume mechanism.
 
 ## Storage and consistency
 
@@ -25,7 +25,7 @@ Store identity and API/schema compatibility are explicit. Refuse invalid storage
 
 ## Learning and visual flow
 
-Explicit learning entry fetches a server-derived resume brief. Source retrieval enforces model-sharing restrictions and returns labeled untrusted content. Attempts preserve capture channel and known/unknown assistance. Record hints/reveals before claiming they are saved. Gate solutions at tool/API boundaries while acknowledging the authoring agent may know them already.
+Explicit learning entry fetches a server-derived resume brief, including an unfinished exploration when no track exists. Agent skills handle one-question-at-a-time discovery and source recommendation using host research tools; no new backend search or inference service is assumed. UIs show exploration/proposal/active states and hand off to chat when agent authoring is needed. Reference verification and access status are stored separately from learner approval. Discovery answers are not graded attempts. Check direction after the first activity before expanding the path. Source retrieval enforces model-sharing restrictions and returns labeled untrusted content. Attempts preserve capture channel and known/unknown assistance. Record hints/reveals before claiming they are saved. Gate solutions at tool/API boundaries while acknowledging the authoring agent may know them already.
 
 Store visual data only as a bounded versioned schema. Fixed SVG/HTML components render escaped labels, step controls, source links, and a deterministic step-list alternative. Model-provided executable markup is disallowed. Schema validity does not imply semantic correctness. Original source figures are inert artifacts with provenance and distinct ingestion requirements.
 

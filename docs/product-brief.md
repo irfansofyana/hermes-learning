@@ -11,13 +11,13 @@ Help a technical learner understand concepts, inspect how other engineers apply 
 - Personal use, one canonical deployed Hermes backend/profile.
 - Desktop and web interfaces, with tools and skills usable in ordinary Hermes conversations, including messaging clients.
 - Learning records and artifacts persist on the backend and remain available across clients and sessions.
-- Both source-first and goal-first entry points.
+- Both source-first and goal-first entry points, with guided discovery for vague interests and complete beginners. The learner need not know the desired outcome or supply materials.
 - Books, papers, repositories, and practical projects are complementary sources.
 - Visualization and usable source navigation are core requirements.
 
 ## Proposed learning loop
 
-Agree on an objective, inspect a source, explain or predict, experiment or implement, record evidence, and revisit later. Allow the learner to request a direct explanation or change direction. Teaching order is configurable per activity; no default teaching preference has been selected. Assessable activities have criteria before attempts. Preserve assistance events and answer provenance; UI submissions can await later assessment.
+Begin with a discovery conversation when needed: understand the interest, offer orientation, agree on a provisional brief, and recommend verified starting materials. Accept uncertainty and allow a suggested starting point without a long questionnaire. Then agree on an objective, inspect a source, explain or predict, experiment or implement, record evidence, and revisit later. Recheck the direction after the first activity. Allow the learner to request a direct explanation or change direction. Teaching order is configurable per activity; no default teaching preference has been selected. Assessable activities have criteria before attempts. Preserve assistance events and answer provenance; UI submissions can await later assessment.
 
 ## Success
 

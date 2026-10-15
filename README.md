@@ -4,7 +4,7 @@ A personal learning workspace for Hermes Agent: source-grounded study, interacti
 
 **Status: research and requirements draft. No runnable plugin exists yet.**
 
-Learn concepts through books and papers, investigate them in real repositories, and apply them in projects. Keep conceptual understanding separate from implementation success and record how much assistance an activity required.
+Start with a vague curiosity, a concrete goal, or a source. The agent helps clarify your direction and recommend starting materials. Learn concepts through books and papers, investigate them in real repositories, and apply them in projects. Keep conceptual understanding separate from implementation success and record how much assistance an activity required.
 
 ## Intended architecture
 
@@ -15,6 +15,7 @@ This is a personal, single-user deployment. Public source code does not imply pu
 ## Documents
 
 - [Draft requirements](docs/requirements.md)
+- [Learner flows, including discovery](docs/user-flows.md)
 - [Product brief](docs/product-brief.md)
 - [Architecture proposal](docs/architecture.md)
 - [Related projects](docs/research/related-projects.md)

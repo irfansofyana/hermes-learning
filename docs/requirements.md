@@ -4,7 +4,7 @@ Status: revised draft for user review. Documentation changes do not authorize pr
 
 ## Goal and scope
 
-A personal learning system inside Hermes that connects conceptual foundations from books/papers to repository investigation and hands-on projects. Desktop, web, and ordinary agent chat share server-owned learning state. Use one canonical deployment/profile. Both goal-first and source-first entry are required. Visualization and usable source navigation are core.
+A personal learning system inside Hermes that connects conceptual foundations from books/papers to repository investigation and hands-on projects. Desktop, web, and ordinary agent chat share server-owned learning state. Use one canonical deployment/profile. Both goal-first and source-first entry are required, including vague-topic discovery when the learner has neither a concrete outcome nor a source. Visualization and usable source navigation are core.
 
 ## R0. Content authorship and assessment ownership
 
@@ -16,11 +16,40 @@ Acceptance: submit in web with no chat open; verify pending status in desktop. S
 
 ## R1. Start and manage a learning track
 
-Create from either a goal or selected source. For source-first, curated excerpts plus metadata are sufficient initially; automatic whole-book analysis is not required. Propose objectives/prerequisites for approval. Permit revision, pausing, and explicit archiving. Persist current objective, activity, and next action independently of any chat session.
+### Discovery before a concrete goal
 
-Acceptance: create a goal-first and a source-first track; open both in desktop/web. Resume an in-progress activity from a new chat using its stable identifier.
+Accept a vague topic such as "I want to learn distributed systems, but I know nothing about it" without requiring an outcome, vocabulary, prior knowledge, or a source. Explore motivation, relevant background, examples that sparked interest, desired depth, and practical constraints as useful context, not a mandatory questionnaire.
 
-## R2. Source grounding and disclosure
+Ask one focused question at a time and adapt to the answer. Probe intent rather than grade knowledge the learner has not studied. If the learner cannot choose, provide a short plain-language orientation and a few concrete directions with examples. Explain unfamiliar terms before asking the learner to choose between them. Accept uncertainty as a valid answer. Distinguish self-reported background from demonstrated evidence; discovery does not award mastery or create failed attempts.
+
+Allow "suggest a starting point" at any time. The agent then proposes a small reversible direction with explicit assumptions, or offers an exploratory activity. A clear existing goal/source can skip discovery; do not force an interview every time. Do not generate an exhaustive curriculum before the learner has found a useful direction.
+
+### Agree on a provisional learning brief
+
+Summarize the learner's interest, reason for learning, stated background and unknowns, a first useful outcome, constraints actually expressed, and tentative prerequisites. Separate learner statements from agent assumptions. Invite correction, then propose a small path and starting materials under R2 for approval. For source-first, curated excerpts plus metadata are sufficient initially; automatic whole-book analysis is not required. An exploratory activity can be approved without committing to a full track.
+
+Save discovery notes, unresolved choices, recommendation status, and approval state in a backend-owned exploration record that can later link to a track. It can resume across chats/clients before a track exists. The UIs distinguish `exploring`, `path proposed`, and `active learning`; these are product states, not assumed host SDK features. A learner's explicit agreement is needed before treating a proposed direction as approved.
+
+After the first activity, check whether the direction matches the learner's interest. Permit scope changes without erasing discovery or earlier evidence. Allow revision, pausing, and explicit archiving. Persist current objective, activity, and next action independently of any chat session.
+
+Acceptance:
+- Start with a broad topic and no knowledge/source. The agent asks an intent question, uses the answer, explains options when needed, and proposes a small brief, materials, and first activity for approval.
+- Reply "I don't know" and then "suggest a starting point." The agent offers a reversible default with labeled assumptions rather than repeating the questionnaire or claiming the learner approved it.
+- Start with a precise goal or source; skip unnecessary discovery while retaining path approval.
+- Pause discovery in chat A and resume its saved record in chat B and desktop/web without inventing missing answers.
+- Complete an exploratory activity, reject its direction, and revise the brief without losing prior evidence or treating the exploration as failed mastery.
+
+## R2. Source discovery, grounding, and disclosure
+
+### Recommend starting materials
+
+The learner need not supply materials. Using the provisional brief, the agent proposes a small starting set with a reading order and a specific first section/excerpt/activity. Explain why each material fits, its prerequisites and difficulty, and whether it contributes a foundation, an implementation example, or practice. Prefer a few usable choices over a large resource dump. Do not force a project or paper into every track when it would not help the agreed objective.
+
+Verify proposed references and relevant access information through available retrieval tools before marking them verified: title/author or repository identity, edition/commit when relevant, working source link, and whether the relevant content is publicly accessible, paid, or not yet checked. Record provenance and verification status. If a tool or source is unavailable, disclose the limitation, keep the candidate unverified, and offer a usable alternative. Do not invent chapter numbers, quotations, access claims, or a reading assignment from metadata alone; a specific passage assignment requires inspected content or a learner-provided locator clearly labeled as such.
+
+Recommendations remain candidates until the learner accepts or substitutes them. Recommending a book does not purchase, download, attach full text, or grant model-sharing consent. Material discovery can run in chat with host research tools; it does not require a new backend search service or service-side inference. UIs show the saved brief and recommendations and provide the chat handoff when no generation path is available. Guided discovery and source recommendation are required in the first usable slice, while automatic full-document ingestion remains deferred.
+
+### Ground and protect attached material
 
 Attach books, papers, repositories, and notes with citation metadata, origin, edition/commit when applicable, stored excerpt hash, and locators. Initial input is curated text/Markdown and pinned code excerpts. Do not require a repository clone or automatic network ingestion. Broader PDF extraction, original figures, and exact page navigation require separate probes.
 
@@ -28,7 +57,7 @@ Direct quotes must match stored excerpts under a documented conservative normali
 
 Each source has an explicit model-sharing policy: metadata-only, selected-excerpts, or full-text. Default to selected-excerpts for curated source content; never automatically expose an entire uploaded book. Metadata-only source text must be blocked from agent and service-model retrieval, including derived summaries/visuals containing protected text. UI must explain that text retrieved into chat may go to its model provider and conversation history. This policy cannot retract previously disclosed content or text pasted directly into chat.
 
-Acceptance: follow a reference to the stored excerpt with edition/commit and highlighted span when available. A fabricated quote fails verification. Metadata-only content and protected derivatives cannot be retrieved by model-facing tools. No copyrighted content is committed to the public repository.
+Acceptance: a vague-topic learner receives a short ordered source recommendation tied to the agreed direction, with reasons, prerequisites, verified references or explicit unverified status, and a concrete inspected starting passage when available. Simulate failed retrieval: the agent does not fabricate a reference or claim inaccessible content was read. Declining a candidate leaves it unapproved and attaches no source content. Follow an accepted reference to its stored excerpt with edition/commit and highlighted span when available. A fabricated quote fails verification. Metadata-only content and protected derivatives cannot be retrieved by model-facing tools. No copyrighted content is committed to the public repository.
 
 ## R3. Learning activities and assistance
 
@@ -68,11 +97,11 @@ Acceptance: due items, deferral, corrected assessments, and repeated requests be
 
 ## R7. Agent tools, skills, and interface transitions
 
-Provide descriptive English tools for track discovery/creation, learning context, source retrieval, activities, assistance, attempts, assessments, evidence, and review. Skills guide source grounding, progressive hints, uncertainty, and saved checkpoints. Essential flows work without a visual widget.
+Provide descriptive English tools for exploration/learning-brief persistence, source recommendation status, track discovery/creation, learning context, source retrieval, activities, assistance, attempts, assessments, evidence, and review. Skills guide adaptive intent discovery, source selection/verification, source grounding, progressive hints, uncertainty, and saved checkpoints. Essential flows work without a visual widget.
 
-Learning begins on an explicit request, skill invocation, or workspace action. Do not automatically mine or assess unrelated work chats. A resume-context tool builds current objective, last attempt/assessment, open questions or misconception notes, current activity, and due reviews from server state. Only committed events count as saved progress; general agent memory is not an alternative authoritative learning database.
+Learning begins on an explicit request, skill invocation, or workspace action. Do not automatically mine or assess unrelated work chats. A resume-context tool returns saved discovery context and unresolved choices when no track is approved; for active tracks it returns the approved brief, current objective, last attempt/assessment, open questions or misconception notes, current activity, and due reviews from server state. Only committed events count as saved progress; general agent memory is not an alternative authoritative learning database.
 
-Tool results include track/activity IDs, text equivalents, and an authenticated workspace URL when a public base URL is configured; never include credentials in links. Workspace provides a copyable resume prompt. Native desktop deep linking is optional until verified.
+Tool results include stable exploration IDs before track creation and track/activity IDs when available, text equivalents, and an authenticated workspace URL when a public base URL is configured; never include credentials in links. Workspace provides a copyable resume prompt. Native desktop deep linking is optional until verified.
 
 Acceptance: continue in chat B after activity in chat A; brief matches web/desktop. Complete a visual-bearing activity in messaging using text and then open the same saved activity in web. An unrelated work-chat fixture does not call learning tools. Validate actual registration/use in the selected messaging runtime, not just direct tool invocation.
 
@@ -104,13 +133,13 @@ Acceptance: unauthorized GET/POST and malicious artifact paths fail. Source-inje
 
 - Deterministic service tests: fixed clock, evidence transitions, solution gating, policy enforcement, retry/conflict behavior, migrations, and malformed-data fixtures.
 - Adapter contract tests: HTTP and tools exercise the same state transitions and errors.
-- Scripted real-agent evaluations: explicit learning entry, verbatim relay, checkpoints, source-injection fixtures, and unrelated work chats. Report model/provider, failures, and observed reliability; these are not deterministic guarantees.
+- Scripted real-agent evaluations: vague-topic discovery, uncertain answers and early exit, skipped interviews for clear goals, reference-verification failures, explicit learning entry, verbatim relay, checkpoints, source-injection fixtures, and unrelated work chats. Report model/provider, failures, and observed reliability; these are not deterministic guarantees.
 - Actual desktop/web/messaging checklist: rendering, auth, links, responsiveness, cross-client continuity, disconnect/reconnect, and persistence, recorded per tested release.
 
 ## Delivery stages
 
 1. Feasibility: real desktop and web diagram, real messaging tools, shared authenticated store, retry safety, assistance continuity, and restart recovery. No standalone mockup substitutes for these probes.
-2. First usable slice: both entry points, curated sources, rubric-backed activities, controlled sequence visual, pending/self/agent assessments, evidence, simple review, and resume across all three interfaces. Frontend delivery may be sequenced but desktop remains required and tested.
+2. First usable slice: guided discovery from vague topics, both entry points, provisional briefs and source recommendations, curated sources, rubric-backed activities, controlled sequence visual, pending/self/agent assessments, evidence, simple review, and resume across all three interfaces. Frontend delivery may be sequenced but desktop remains required and tested.
 3. Extend ingestion and visual types after actual use. Add service-model operations only after their probe and a separate design decision.
 
 ## Out of scope
