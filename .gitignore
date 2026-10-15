@@ -1,0 +1,17 @@
+# Local secrets and learning data
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite*
+/data/
+/artifacts/
+/uploads/
+/backups/
+.hermes/
+__pycache__/
+.venv/
+node_modules/
+dist/
+.DS_Store
