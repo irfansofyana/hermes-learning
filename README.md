@@ -1,3 +1,5 @@
+<img src="ui/src/learning-mark.svg" width="64" height="64" alt="Hermes Learning winged book logo">
+
 # Hermes Learning
 
 A personal learning workspace for Hermes Agent: source-grounded study, interactive diagrams, practice, and evidence shared across desktop, web, and chat tools.

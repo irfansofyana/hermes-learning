@@ -1,12 +1,13 @@
 import {build} from 'esbuild';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('.',import.meta.url));
-const base={bundle:true,jsx:'transform',loader:{'.css':'text'},target:'es2020',logLevel:'info',absWorkingDir:root,define:{'process.env.NODE_ENV':'"production"'},minify:true};
+const base={bundle:true,jsx:'transform',loader:{'.css':'text','.svg':'text'},target:'es2020',logLevel:'info',absWorkingDir:root,define:{'process.env.NODE_ENV':'"production"'},minify:true};
 const hostReact={name:'host-react',setup(b){b.onResolve({filter:/^react$/},()=>({path:'react',namespace:'hermes'}));b.onLoad({filter:/.*/,namespace:'hermes'},()=>({contents:'module.exports = window.__HERMES_PLUGIN_SDK__.React;',loader:'js'}));}};
 await build({...base,entryPoints:['src/dashboard.jsx'],outfile:'../plugin/dashboard/dist/index.js',format:'iife',plugins:[hostReact]});
 await build({...base,entryPoints:['src/desktop.jsx'],outfile:'../plugin/desktop/plugin.js',format:'esm',external:['react','@hermes/plugin-sdk']});
 await build({...base,entryPoints:['src/preview.jsx'],outfile:'dist/preview.js',format:'iife'});
 await mkdir(new URL('../plugin/desktop/',import.meta.url),{recursive:true});
 await writeFile(new URL('../plugin/desktop/package.json',import.meta.url),JSON.stringify({private:true,type:'module'},null,2)+'\n');
-await writeFile(new URL('dist/index.html',import.meta.url),'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Hermes Learning</title><style>html,body,#root{margin:0;width:100%;height:100%;overflow:hidden}body{background:#fff}</style></head><body><div id="root"></div><script src="/preview.js"></script></body></html>');
+const favicon='data:image/svg+xml,'+encodeURIComponent(await readFile(new URL('src/learning-mark.svg',import.meta.url),'utf8'));
+await writeFile(new URL('dist/index.html',import.meta.url),'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Hermes Learning</title><link rel="icon" type="image/svg+xml" href="'+favicon+'"><style>html,body,#root{margin:0;width:100%;height:100%;overflow:hidden}body{background:#fff}</style></head><body><div id="root"></div><script src="/preview.js"></script></body></html>');

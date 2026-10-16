@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+  <title>Hermes Learning</title>
+  <g fill="#127e80">
+    <path d="M23 14C17 8 10 6 3 6l5 9c5 0 10 2 15 6v-7Z"/>
+    <path d="M23 24c-4-4-9-6-14-6l4 8c4 0 7 2 10 5v-7Z"/>
+    <path d="M23 34c-2-3-5-5-8-5l3 8 5 5v-8Z"/>
+    <path d="M25 14c6-6 13-8 20-8l-5 9c-5 0-10 2-15 6v-7Z"/>
+    <path d="M25 24c4-4 9-6 14-6l-4 8c-4 0-7 2-10 5v-7Z"/>
+    <path d="M25 34c2-3 5-5 8-5l-3 8-5 5v-8Z"/>
+  </g>
+</svg>

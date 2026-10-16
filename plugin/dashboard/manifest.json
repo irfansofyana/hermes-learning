@@ -1,7 +1,7 @@
 {
   "name": "hermes-learning",
   "label": "Learning",
-  "description": "Personal learning paths, sources, practice and evidence. Tracking starts only when you choose it.",
+  "description": "Study topics, practise with sources, and save your answers. Tracking starts only when you choose it.",
   "icon": "BookOpen",
   "version": "0.1.0",
   "tab": {"path": "/learning", "position": "end", "hidden": false},
