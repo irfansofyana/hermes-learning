@@ -20,7 +20,7 @@ The tutor chooses reasonable starting assumptions and displays them with the les
 - Read the explanation and worked example. Optional practice does not block the rest of the lesson.
 - Choose **Explain simply**, **Show an example**, or **Ask a question**. The tutor answers inside Learning with the selected lesson as context.
 - Open **Source material** to inspect supplied text, locators, links, and retrieval status. An inaccessible repository or unsupported page remains visibly identified; usable material can still support a lesson.
-- Choose **Mark as read** to record reading progress, or **Next lesson** to continue. Reading a lesson does not create an assessed attempt or establish mastery.
+- Choose **Mark as read** to record reading progress, **Mark as unread** to reset that lesson, or **Next lesson** to continue. Reading a lesson does not create an assessed attempt or establish mastery.
 
 Desktop shows the path, lesson, and collapsible tutor together. On narrow screens, Path, Lesson, and Tutor tabs switch panels while preserving the draft and panel scroll state. The interface follows the host/system theme, with a theme control in its header.
 
