@@ -12,11 +12,15 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+import time
 import uuid
 from urllib.parse import urlsplit
 
 API_VERSION = SCHEMA_VERSION = 1
 LEVELS = ['none', 'nudge', 'targeted-hint', 'worked-step', 'full-solution-shown']
+OUTCOMES = ['needs-work', 'developing', 'demonstrated']
+CAPABILITIES = ['objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1']
+WITHHELD = 'Content withheld by source-sharing policy.'
 READS = {'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
 WRITES = {'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
 KINDS = ('track', 'source', 'activity', 'attempt', 'assessment', 'review', 'dispute', 'help', 'run', 'context', 'recommendation')
@@ -76,7 +80,18 @@ class Store:
             fail('Store must be a file in an existing data directory', 'invalid_path')
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         with self._connection() as db:
-            db.execute('PRAGMA journal_mode=WAL')
+            # Simultaneous first connections can fail this journal transition
+            # immediately without invoking SQLite's busy timeout. Retry only
+            # lock contention, before any transaction or records are created.
+            deadline = time.monotonic() + 15
+            while True:
+                try:
+                    db.execute('PRAGMA journal_mode=WAL')
+                    break
+                except sqlite3.OperationalError as exc:
+                    if str(exc) != 'database is locked' or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.025)
             db.execute('BEGIN IMMEDIATE')
             try:
                 version = db.execute('PRAGMA user_version').fetchone()[0]
@@ -146,9 +161,60 @@ class Store:
     def _protected(self, db, activity, channel):
         return channel == 'chat_relayed' and any(self._get(db, 'source', s)['sharing'] == 'metadata-only' for s in activity['source_ids'])
 
+    def _track_view(self, track):
+        # Derivation works for old schema-1 records without migrating on reads.
+        details = []
+        seen = set()
+        for title in track['objectives']:
+            ident = str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps([track['id'], title], ensure_ascii=False)))
+            if ident not in seen:
+                details.append({'id': ident, 'title': title})
+                seen.add(ident)
+        return {**track, 'objective_details': details, 'learner_profile': track.get('learner_profile', {})}
+
+    def _profile(self, value, previous=None):
+        if not isinstance(value, dict) or set(value) - {'background', 'goal', 'minutes'}:
+            fail('learner_profile accepts only background, goal and minutes')
+        profile = dict(previous or {})
+        for field in ('background', 'goal'):
+            if field in value:
+                profile[field] = text(value[field], field, 2000)
+        if 'minutes' in value:
+            if type(value['minutes']) is not int or not 1 <= value['minutes'] <= 240:
+                fail('Session minutes must be an integer from 1 to 240')
+            profile['minutes'] = value['minutes']
+        return profile
+
+    def _lineage_ids(self, db, activity):
+        root = activity.get('root_activity_id', activity['id'])
+        return {a['id'] for a in self._all(db, 'activity', activity['track_id']) if a.get('root_activity_id', a['id']) == root}
+
+    def _safe_help(self, db, event, channel, restricted=False):
+        result = dict(event)
+        if restricted or self._protected(db, self._get(db, 'activity', event['activity_id']), channel):
+            result.pop('content', None)
+            result['content_withheld'] = True
+        return result
+
+    def _safe_evidence(self, db, record, kind, channel):
+        result = dict(record)
+        attempt = record if kind == 'attempt' else self._get(db, 'attempt', record['attempt_id'])
+        restricted = self._protected(db, self._get(db, 'activity', attempt['activity_id']), channel)
+        if kind == 'attempt':
+            result['assistance_events'] = [self._safe_help(db, e, channel, restricted) for e in record.get('assistance_events', [])]
+        if restricted:
+            for key in ('answer', 'feedback', 'reason', 'uncertainty'):
+                if key in result:
+                    result[key] = WITHHELD
+            if 'criterion_results' in result:
+                result['criterion_results'] = [{**item, 'feedback': WITHHELD} for item in result['criterion_results']]
+            result['content_withheld'] = True
+        return result
+
     def _safe_activity(self, db, activity, channel, unlocked=False):
         result = {k: activity[k] for k in ('id', 'track_id', 'title', 'kind', 'prompt', 'description', 'source_ids', 'version', 'author_kind', 'created_at')}
         result.update(previous_version_id=activity.get('previous_version_id'), root_activity_id=activity.get('root_activity_id', activity['id']))
+        result.update(objective_ids=activity.get('objective_ids', []), objective_snapshots=activity.get('objective_snapshots', []), competency=activity.get('competency', 'conceptual'), purpose=activity.get('purpose', 'practice'))
         visual = activity['visual']
         if visual:
             count = len(visual['steps']) if unlocked else visual['visible_steps']
@@ -177,50 +243,228 @@ class Store:
             rows = self._all(db, kind, track_id)
             if kind == 'source':
                 rows = [self._safe_source(r, channel) for r in rows]
+            elif kind == 'track':
+                rows = [self._track_view(r) for r in rows]
             elif kind == 'activity':
                 rows = [self._safe_activity(db, r, channel) for r in rows]
-            elif channel == 'chat_relayed' and kind in ('attempt', 'assessment', 'dispute'):
-                for record in rows:
-                    attempt = record if kind == 'attempt' else self._get(db, 'attempt', record['attempt_id'])
-                    if self._protected(db, self._get(db, 'activity', attempt['activity_id']), channel):
-                        for key in ('answer', 'feedback', 'reason'):
-                            if key in record:
-                                record[key] = 'Content withheld by source-sharing policy.'
+            elif kind in ('attempt', 'assessment', 'dispute'):
+                rows = [self._safe_evidence(db, r, kind, channel) for r in rows]
             result[{'activity': 'activities'}.get(kind, kind + 's')] = rows
+        self._project_learning(result)
         return result
+
+    def _summarize_attempts(self, attempts, assessments, disputed):
+        ids = {a['id'] for a in attempts}
+        judgments = [a for a in assessments if a['attempt_id'] in ids]
+        assessed = {a['attempt_id'] for a in judgments}
+        latest = [a for a in judgments if attempts and a['attempt_id'] == attempts[-1]['id']]
+        if any(a['id'] in disputed for a in judgments):
+            status = 'disputed'
+        elif ids - assessed:
+            status = 'awaiting-assessment'
+        elif latest:
+            status = min((a['outcome'] for a in latest), key=OUTCOMES.index)
+        else:
+            status = 'not-started'
+        return {'status': status, 'attempt_count': len(attempts), 'assessment_count': len(judgments)}, judgments, latest
+
+    def _objective_evidence(self, objective_id, activities, attempts, assessments, disputed):
+        linked = [a for a in attempts if objective_id in activities[a['activity_id']].get('objective_ids', [])]
+        summary, judgments, _ = self._summarize_attempts(linked, assessments, disputed)
+        dimensions = {}
+        basis_ids = set()
+        for dimension in ('conceptual', 'practical'):
+            subset = [a for a in linked if activities[a['activity_id']].get('competency', 'conceptual') in (dimension, 'both')]
+            dimensions[dimension], _, latest = self._summarize_attempts(subset, assessments, disputed)
+            basis_ids.update(a['id'] for a in latest)
+        if summary['status'] in OUTCOMES:
+            summary['status'] = min((d['status'] for d in dimensions.values() if d['status'] in OUTCOMES), key=OUTCOMES.index)
+        return summary, judgments, dimensions, [a for a in judgments if a['id'] in basis_ids]
+
+    def _objective_review(self, db, review, now):
+        """Update a policy-2 schedule from the same evidence used by progress.
+
+        assessment_id/activity_id remain the triggering event; basis IDs explain
+        the schedule, which may be governed by weaker evidence from another task.
+        """
+        tid = review['track_id']
+        activities = {a['id']: a for a in self._all(db, 'activity', tid)}
+        attempts = self._all(db, 'attempt', tid)
+        assessments = self._all(db, 'assessment', tid)
+        superseded = {a['supersedes'] for a in assessments if a.get('supersedes')}
+        effective = [a for a in assessments if a['id'] not in superseded]
+        disputed = {d['assessment_id'] for d in self._all(db, 'dispute', tid)} - superseded
+        summary, judgments, _, basis = self._objective_evidence(review['objective_id'], activities, attempts, effective, disputed)
+        linked_ids = {a['id'] for a in attempts if review['objective_id'] in activities[a['activity_id']].get('objective_ids', [])}
+        pending = bool(linked_ids - {a['attempt_id'] for a in judgments})
+        has_dispute = any(a['id'] in disputed for a in judgments)
+        weakest = min((a['outcome'] for a in basis), key=OUTCOMES.index) if basis else None
+        driving = [a for a in basis if a['outcome'] == weakest]
+        review.update(basis_status=summary['status'], basis_assessment_ids=[a['id'] for a in driving], pending_assessment=pending, disputed=has_dispute)
+        if has_dispute or pending:
+            detail = 'Unresolved disputed feedback' if has_dispute else 'Answers awaiting assessment'
+            reason = f'Policy v2: {detail}; resolve the evidence before relying on the retained review date.'
+            review.setdefault('due_at', now)
+        elif driving:
+            days = {'needs-work': 1, 'developing': 3, 'demonstrated': 7}[weakest]
+            anchor = min(a['created_at'] for a in driving)
+            methods = '/'.join(sorted({a['method'] for a in driving}))
+            due = iso(datetime.fromisoformat(anchor.replace('Z', '+00:00')) + timedelta(days=days))
+            reason = f'Policy v2: objective {weakest}; the weakest current evidence across competencies ({methods} feedback) sets a {days}-day interval from {anchor}. Fixed heuristic, not a mastery estimate.'
+            if not review.get('manual'):
+                review['due_at'] = due
+        else:
+            reason = 'Policy v2: no assessed objective evidence; choose an activity and review its answer.'
+            review.setdefault('due_at', now)
+        if review.get('manual'):
+            reason = 'Learner-set review date retained until feedback on a new attempted task. ' + reason
+        review.update(reason=reason, updated_at=now)
+        return review
+
+    def _project_learning(self, snapshot):
+        """Read-only projections. Counts describe evidence, never mastery."""
+        activities = {a['id']: a for a in snapshot['activities']}
+        retired = {a['previous_version_id'] for a in activities.values() if a.get('previous_version_id')}
+        superseded = {a['supersedes'] for a in snapshot['assessments'] if a.get('supersedes')}
+        assessments = [a for a in snapshot['assessments'] if a['id'] not in superseded]
+        disputed = {d['assessment_id'] for d in snapshot['disputes']} - superseded
+        attempted = {a['activity_id'] for a in snapshot['attempts']}
+        assessed = {a['attempt_id'] for a in assessments}
+        now = iso(self.clock())
+
+        progress = []
+        actions = []
+        for review in snapshot['reviews']:
+            objective = review.get('objective_id')
+            options = [a for a in activities.values() if objective and a['track_id'] == review['track_id'] and objective in a['objective_ids'] and a['id'] not in attempted and a['id'] not in retired]
+            fallback = [a for a in activities.values() if a['root_activity_id'] == activities[review['activity_id']]['root_activity_id'] and a['id'] not in retired and (not objective or objective in a['objective_ids'])]
+            review['suggested_activity_id'] = options[0]['id'] if options else (fallback[-1]['id'] if fallback else None)
+
+        for track in snapshot['tracks']:
+            tid = track['id']
+            track_attempts = [a for a in snapshot['attempts'] if a['track_id'] == tid]
+            for objective in track['objective_details']:
+                summary, judgments, dimensions, _ = self._objective_evidence(objective['id'], activities, track_attempts, assessments, disputed)
+                linked = [a for a in track_attempts if objective['id'] in activities[a['activity_id']]['objective_ids']]
+                progress.append({'track_id': tid, 'objective_id': objective['id'], 'title': objective['title'], **summary, 'status_basis': 'Latest attempted task per competency; the weaker judgment applies when feedback differs. Pending answers and unresolved disputes take precedence. Latest feedback may concern an earlier task.', 'assisted_attempt_count': sum(a.get('assistance', 'unknown') not in ('none', 'unknown') for a in linked), 'latest_assessment': judgments[-1] if judgments else None, **dimensions})
+
+            def action(kind, title, reason, **context):
+                return {'track_id': tid, 'kind': kind, 'title': title, 'reason': reason, **context}
+
+            pending = [a for a in track_attempts if a['id'] not in assessed]
+            disputes = [a for a in assessments if a['track_id'] == tid and a['id'] in disputed]
+            reviews = sorted((r for r in snapshot['reviews'] if r['track_id'] == tid and r['due_at'] <= now), key=lambda r: r['due_at'])
+            fresh = [a for a in activities.values() if a['track_id'] == tid and a['id'] not in attempted and a['id'] not in retired]
+            if track['status'] in ('paused', 'archived'):
+                chosen = action('resume', 'Resume this track', 'Explicitly resume tracking before continuing.')
+            elif track['status'] in ('exploring', 'proposed'):
+                chosen = action('proposal', 'Set your learning direction', 'Review and approve a concrete learning brief before continuing.')
+            elif disputes:
+                evidence = disputes[-1]
+                chosen = action('dispute', 'Resolve disputed feedback', 'Review the saved answer and criteria, then append a correction if needed.', activity_id=evidence['activity_id'], attempt_id=evidence['attempt_id'])
+            elif pending:
+                chosen = action('assessment', 'Review your answer', 'This saved answer is waiting for feedback against its criteria.', activity_id=pending[0]['activity_id'], attempt_id=pending[0]['id'])
+            elif reviews:
+                review = reviews[0]
+                if review.get('objective_id') and not review['suggested_activity_id']:
+                    chosen = action('author', 'Create an objective review activity', 'This objective is due for review, but no current activity covers it. Create a different example.', objective_id=review['objective_id'])
+                else:
+                    chosen = action('review', 'Revisit this objective' if review.get('objective_id') else 'Revisit this activity', review['reason'], activity_id=review['suggested_activity_id'] or review['activity_id'])
+                    if review.get('objective_id'):
+                        chosen['objective_id'] = review['objective_id']
+            elif fresh:
+                chosen = action('practice', 'Try the next activity', 'This activity version has no saved answer yet.', activity_id=fresh[0]['id'])
+                if fresh[0]['objective_ids']:
+                    chosen['objective_id'] = fresh[0]['objective_ids'][0]
+            else:
+                rows = [row for row in progress if row['track_id'] == tid]
+                priority = {'not-started':0, 'needs-work':1, 'developing':2, 'demonstrated':3, 'awaiting-assessment':0, 'disputed':0}
+                target = min(rows, key=lambda row: priority[row['status']]) if rows else None
+                chosen = action('author', 'Create a transfer activity' if track_attempts else 'Create a first activity', 'Use a different example to test this objective.' if track_attempts else 'Start with a short diagnostic tied to your learning objectives.')
+                if target:
+                    chosen['objective_id'] = target['objective_id']
+            actions.append(chosen)
+        snapshot['objective_progress'] = progress
+        snapshot['next_actions'] = actions
 
     def _visual(self, visual):
         if visual is None:
             return None
-        if not isinstance(visual, dict) or visual.get('type') != 'sequence' or visual.get('schema_version', 1) != 1:
-            fail('Only schema 1 structured sequence visuals are supported')
-        if set(visual) - {'type', 'schema_version', 'title', 'participants', 'steps', 'visible_steps'}:
+        types = ('sequence', 'state-machine', 'code-trace')
+        if not isinstance(visual, dict) or visual.get('type') not in types or type(visual.get('schema_version', 1)) is not int or visual.get('schema_version', 1) != 1:
+            fail('Only schema 1 sequence, state-machine and code-trace visuals are supported')
+        kind = visual['type']
+        allowed = {'type', 'schema_version', 'title', 'steps', 'visible_steps'}
+        allowed.update({'sequence': {'participants'}, 'state-machine': {'states', 'initial'}, 'code-trace': {'code', 'language'}}[kind])
+        if set(visual) - allowed:
             fail('Unsupported visual fields')
-        participants = visual.get('participants')
         steps = visual.get('steps')
-        if not isinstance(participants, list) or not 1 <= len(participants) <= 10 or not isinstance(steps, list) or not 1 <= len(steps) <= 30:
-            fail('Sequence requires 1–10 participants and 1–30 steps')
+        if not isinstance(steps, list) or not 1 <= len(steps) <= 30:
+            fail('A visual requires 1–30 steps')
+        result = {'schema_version': 1, 'type': kind, 'title': text(visual.get('title', ''), 'visual title', 300)}
         ids = set()
-        clean_participants = []
-        for part in participants:
-            if not isinstance(part, dict) or set(part) != {'id', 'label'}:
-                fail('Each participant requires only id and label')
-            ident = text(part['id'], 'participant id', 60, True)
-            if ident in ids:
-                fail('Duplicate participant id')
-            ids.add(ident)
-            clean_participants.append({'id': ident, 'label': text(part['label'], 'participant label', 150, True)})
+        if kind in ('sequence', 'state-machine'):
+            field = 'participants' if kind == 'sequence' else 'states'
+            nodes = visual.get(field)
+            maximum = 10 if kind == 'sequence' else 20
+            if not isinstance(nodes, list) or not 1 <= len(nodes) <= maximum:
+                fail(f'{field} requires 1–{maximum} entries')
+            cleaned = []
+            for node in nodes:
+                if not isinstance(node, dict) or set(node) != {'id', 'label'}:
+                    fail('Each visual node requires only id and label')
+                ident = text(node['id'], 'visual node id', 60, True)
+                if ident in ids:
+                    fail('Duplicate visual node id')
+                ids.add(ident)
+                cleaned.append({'id': ident, 'label': text(node['label'], 'visual node label', 150, True)})
+            result[field] = cleaned
+            if kind == 'state-machine':
+                initial = text(visual.get('initial'), 'initial state', 60, True)
+                if initial not in ids:
+                    fail('Initial state must exist')
+                result['initial'] = initial
+                previous = initial
+        else:
+            result.update(code=text(visual.get('code'), 'code', 12000, True), language=text(visual.get('language', ''), 'language', 40))
+            line_count = len(result['code'].split('\n'))
         clean_steps = []
         for step in steps:
-            if not isinstance(step, dict) or set(step) - {'from', 'to', 'label', 'explanation'}:
-                fail('Unsupported sequence step')
-            if not isinstance(step.get('from'), str) or not isinstance(step.get('to'), str) or step['from'] not in ids or step['to'] not in ids:
-                fail('Step participants must exist')
-            clean_steps.append({'from': step['from'], 'to': step['to'], 'label': text(step.get('label', ''), 'step label', 300, True), 'explanation': text(step.get('explanation', ''), 'step explanation', 2000)})
+            fields = {'label', 'explanation'} | ({'line', 'variables'} if kind == 'code-trace' else {'from', 'to'})
+            if not isinstance(step, dict) or set(step) - fields:
+                fail('Unsupported visual step')
+            clean = {'label': text(step.get('label', ''), 'step label', 300, True), 'explanation': text(step.get('explanation', ''), 'step explanation', 2000)}
+            if kind == 'code-trace':
+                line = step.get('line')
+                if type(line) is not int or not 1 <= line <= line_count:
+                    fail('Code trace line must reference a line of code')
+                variables = step.get('variables', [])
+                if not isinstance(variables, list) or len(variables) > 20:
+                    fail('A trace step supports at most 20 variables')
+                clean_variables = []
+                names = set()
+                for variable in variables:
+                    if not isinstance(variable, dict) or set(variable) != {'name', 'value'}:
+                        fail('Trace variables require only name and value')
+                    name = text(variable['name'], 'variable name', 150, True)
+                    if name in names:
+                        fail('Duplicate variable in trace step')
+                    names.add(name)
+                    clean_variables.append({'name': name, 'value': text(variable['value'], 'variable value', 2000)})
+                clean.update(line=line, variables=clean_variables)
+            else:
+                if not isinstance(step.get('from'), str) or not isinstance(step.get('to'), str) or step['from'] not in ids or step['to'] not in ids:
+                    fail('Step references must exist')
+                if kind == 'state-machine':
+                    if step['from'] != previous:
+                        fail('State-machine steps must follow the previous state')
+                    previous = step['to']
+                clean.update({'from': step['from'], 'to': step['to']})
+            clean_steps.append(clean)
         visible = visual.get('visible_steps', 1)
         if type(visible) is not int or not 0 <= visible <= len(steps):
-            fail('visible_steps is outside the sequence')
-        return {'schema_version': 1, 'type': 'sequence', 'title': text(visual.get('title', ''), 'visual title', 300), 'participants': clean_participants, 'steps': clean_steps, 'visible_steps': visible}
+            fail('visible_steps is outside the visual')
+        return {**result, 'steps': clean_steps, 'visible_steps': visible}
 
     def dispatch(self, action, params, *, channel='ui_direct'):
         if not isinstance(action, str) or action not in READS | WRITES or not isinstance(params, dict):
@@ -228,7 +472,7 @@ class Store:
         if channel not in ('ui_direct', 'chat_relayed'):
             fail('Unsupported channel')
         try:
-            encoded = json.dumps(params, allow_nan=False)
+            encoded = json.dumps(params, allow_nan=False, ensure_ascii=False)
         except (TypeError, ValueError):
             fail('Parameters must be JSON data')
         if len(encoded) > 150000:
@@ -250,7 +494,7 @@ class Store:
     def _dispatch(self, db, action, p, channel):
         now = iso(self.clock())
         if action in ('state', 'export'):
-            result = {'api_version': 1, 'schema_version': 1, 'store_id': self.store_id, 'compatible_client_versions': [1], **self._snapshot(db, channel)}
+            result = {'api_version': 1, 'schema_version': 1, 'store_id': self.store_id, 'compatible_client_versions': [1], 'capabilities': CAPABILITIES, **self._snapshot(db, channel)}
             if action == 'export':
                 result.update(export_version=1, exported_at=now)
                 # This export is a shareable view. Full private recovery uses backup().
@@ -260,9 +504,12 @@ class Store:
             track = self._get(db, 'track', p.get('track_id'))
             snapshot = self._snapshot(db, channel, track['id'])
             snapshot.pop('tracks')
-            result = {'track': track, **snapshot}
+            result = {'track': self._track_view(track), 'capabilities': CAPABILITIES, **snapshot}
             if action == 'resume_brief':
-                result.update(current_objective=next(iter(track['objectives']), None), current_activity=next(iter(snapshot['activities'][-1:]), None), last_attempt=next(iter(snapshot['attempts'][-1:]), None), last_assessment=next(iter(snapshot['assessments'][-1:]), None), next_action='Review your proposed direction' if track['status'] in ('exploring', 'proposed') else 'Continue studying or choose a practice activity', text=f"{track['title']}: {track['status']}. {track['brief']}")
+                recommendation = snapshot['next_actions'][0]
+                objective = next((o['title'] for o in self._track_view(track)['objective_details'] if o['id'] == recommendation.get('objective_id')), next(iter(track['objectives']), None))
+                current = next((a for a in snapshot['activities'] if a['id'] == recommendation.get('activity_id')), None)
+                result.update(current_objective=objective, current_activity=current, last_attempt=next(iter(snapshot['attempts'][-1:]), None), last_assessment=next(iter(snapshot['assessments'][-1:]), None), next_action=recommendation['title'], text=f"{track['title']}: {track['status']}. {recommendation['reason']}")
             return result
         if action == 'quote_check':
             source = self._get(db, 'source', p.get('source_id'))
@@ -281,14 +528,19 @@ class Store:
                 _, track = self._context(db, p['context_id'])
                 if activity['track_id'] != track['id']:
                     fail('Activity belongs to another track', 'context_mismatch', 403)
-                unlocked = any(a['activity_id'] == activity['id'] for a in self._all(db, 'attempt', track['id'])) or any(h['activity_id'] == activity['id'] and h['level'] == 'full-solution-shown' for h in self._all(db, 'help', track['id']))
-            return {'activity': self._safe_activity(db, activity, channel, unlocked)}
+                unlocked = any(a['activity_id'] == activity['id'] for a in self._all(db, 'attempt', track['id'])) or any(h['activity_id'] == activity['id'] and h['level'] == 'full-solution-shown' and h.get('origin', 'authored') == 'authored' for h in self._all(db, 'help', track['id']))
+            result = self._safe_activity(db, activity, channel, unlocked)
+            if p.get('context_id'):
+                lineage = self._lineage_ids(db, activity)
+                result['help_events'] = [self._safe_help(db, h, channel, self._protected(db, activity, channel)) for h in self._all(db, 'help', activity['track_id']) if h['activity_id'] in lineage]
+            return {'activity': result}
         if action in ('start', 'resume'):
             # Adapters own explicit human entry; model-facing dispatch cannot enroll.
             if channel != 'ui_direct':
                 fail('Explicit user entry is required', 'explicit_entry_required', 403)
             if action == 'start':
                 track = self._new(title=text(p.get('title'), 'title', 300, True), interest=text(p.get('interest', ''), 'interest'), status='exploring', brief='', objectives=[], assumptions=[], open_questions=[], revision=1, created_at=now, updated_at=now)
+                track['learner_profile'] = self._profile(p.get('learner_profile', {}))
                 self._put(db, 'track', track)
             else:
                 track = self._get(db, 'track', p.get('track_id'))
@@ -311,6 +563,8 @@ class Store:
                 fail('Track changed. Reload before editing.', 'revision_conflict', 409)
             if action == 'brief':
                 track.update(brief=text(p.get('brief'), 'brief', required=True), objectives=strings(p.get('objectives', []), 'objectives'), status='proposed')
+                if 'learner_profile' in p:
+                    track['learner_profile'] = self._profile(p['learner_profile'], track.get('learner_profile'))
                 for field in ('assumptions', 'open_questions'):
                     if field in p:
                         track[field] = strings(p[field], field)
@@ -334,7 +588,7 @@ class Store:
                 track['status'] = status
             track.update(revision=track['revision'] + 1, updated_at=now)
             self._put(db, 'track', track, True)
-            return {'track': track}
+            return {'track': self._track_view(track)}
         if action == 'source':
             recommendation_id = p.get('recommendation_id')
             if recommendation_id is not None:
@@ -393,6 +647,20 @@ class Store:
                 fail('Hints use nudge, targeted-hint, or worked-step')
             hints = {k: text(v, 'hint', 5000, True) for k, v in hints.items()}
             activity = self._new(track_id=tid, title=text(p.get('title'), 'title', 300, True), kind=kind, prompt=text(p.get('prompt'), 'prompt', required=True), description=text(p.get('description', ''), 'description'), criteria=criteria, solution=text(p.get('solution'), 'solution', required=True), hints=hints, source_ids=source_ids, visual=self._visual(p.get('visual')), version=1, author_kind='learner' if channel == 'ui_direct' else 'chat-agent', created_at=now)
+            details = {o['id']: o for o in self._track_view(track)['objective_details']}
+            if previous and 'objective_ids' not in p:
+                objective_ids = previous.get('objective_ids', [])
+                snapshots = previous.get('objective_snapshots', [])
+            else:
+                objective_ids = strings(p.get('objective_ids', []), 'objective_ids', 30, 100)
+                if len(set(objective_ids)) != len(objective_ids) or any(ident not in details for ident in objective_ids):
+                    fail('Objective IDs must be distinct objectives on the current track')
+                snapshots = [details[ident] for ident in objective_ids]
+            competency = p.get('competency', (previous or {}).get('competency', 'conceptual'))
+            purpose = p.get('purpose', (previous or {}).get('purpose', 'practice'))
+            if competency not in ('conceptual', 'practical', 'both') or purpose not in ('diagnostic', 'practice', 'transfer'):
+                fail('Unsupported competency or activity purpose')
+            activity.update(objective_ids=objective_ids, objective_snapshots=snapshots, competency=competency, purpose=purpose)
             if previous:
                 activity.update(version=previous['version'] + 1, previous_version_id=previous['id'], root_activity_id=previous.get('root_activity_id', previous['id']))
             self._put(db, 'activity', activity)
@@ -411,27 +679,46 @@ class Store:
                 if attempts:
                     if attempts[0]['answer'] != answer or attempts[0]['channel'] != channel:
                         fail('Run already submitted with a different payload or channel', 'submission_conflict', 409)
-                    return {'attempt': attempts[0], 'duplicate': True}
-                events = [h for h in self._all(db, 'help', tid) if h['activity_id'] == activity['id']]
-                prior_attempts = [a for a in self._all(db, 'attempt', tid) if a['activity_id'] == activity['id']]
+                    return {'attempt': self._safe_evidence(db, attempts[0], 'attempt', channel), 'duplicate': True}
+                lineage = self._lineage_ids(db, activity)
+                events = [h for h in self._all(db, 'help', tid) if h['activity_id'] in lineage]
+                prior_attempts = [a for a in self._all(db, 'attempt', tid) if a['activity_id'] in lineage]
                 assistance = max((h['level'] for h in events), key=LEVELS.index, default='unknown' if channel == 'chat_relayed' or prior_attempts else 'none')
                 attempt = self._new(track_id=tid, activity_id=activity['id'], activity_version=activity['version'], run_id=run['id'], answer=answer, channel=channel, assistance=assistance, assistance_events=events, prior_help_exposure=any(h['run_id'] != run['id'] for h in events), prior_attempt_count=len(prior_attempts), status='awaiting_assessment', created_at=now)
                 self._put(db, 'attempt', attempt)
-                return {'attempt': attempt, 'duplicate': False}
-            if attempts:
-                fail('Submitted attempts are immutable; start a new run for further help', 'run_submitted', 409)
+                for review in self._all(db, 'review', tid):
+                    if review.get('objective_id') in activity.get('objective_ids', []):
+                        self._objective_review(db, review, now)
+                        self._put(db, 'review', review, True)
+                return {'attempt': self._safe_evidence(db, attempt, 'attempt', channel), 'duplicate': False}
             level = p.get('level')
             if level not in LEVELS[1:]:
                 fail('Unsupported help level')
             if self._protected(db, activity, channel):
                 fail('Source-sharing policy blocks this help', 'source_restricted', 403)
-            content = activity['solution'] if level == 'full-solution-shown' else activity['hints'].get(level)
+            generated = 'content' in p
+            request_id = text(p['request_id'], 'request_id', 100, True) if 'request_id' in p else None
+            if generated and request_id is None:
+                fail('Generated help requires request_id for safe retries')
+            content = text(p['content'], 'content', 5000, True) if generated else (activity['solution'] if level == 'full-solution-shown' else activity['hints'].get(level))
             if content is None:
                 fail('No authored help at this level', 'help_unavailable', 404)
-            event = self._new(track_id=tid, run_id=run['id'], activity_id=activity['id'], level=level, channel=channel, created_at=now)
-            self._put(db, 'help', event)
-            result = {'help': event, 'level': level, 'content': content}
-            if level == 'full-solution-shown':
+            origin = 'generated' if generated else 'authored'
+            duplicate = False
+            event = next((h for h in self._all(db, 'help', tid) if request_id is not None and h['run_id'] == run['id'] and h.get('request_id') == request_id), None)
+            if event:
+                if (event['level'], event.get('content'), event['channel'], event.get('origin', 'authored')) != (level, content, channel, origin):
+                    fail('Help request ID already used with different content, level or channel', 'help_conflict', 409)
+                duplicate = True
+            else:
+                if attempts:
+                    fail('Submitted attempts are immutable; start a new run for further help', 'run_submitted', 409)
+                event = self._new(track_id=tid, run_id=run['id'], activity_id=activity['id'], level=level, channel=channel, content=content, author_kind=('learner' if channel == 'ui_direct' else 'chat-agent') if generated else activity['author_kind'], origin=origin, created_at=now)
+                if request_id is not None:
+                    event['request_id'] = request_id
+                self._put(db, 'help', event)
+            result = {'help': event, 'level': level, 'content': content, 'duplicate': duplicate}
+            if level == 'full-solution-shown' and not generated:
                 result['activity'] = self._safe_activity(db, activity, channel, True)
             return result
         if action == 'assess':
@@ -450,29 +737,76 @@ class Store:
                 if any(a['supersedes'] == supersedes for a in self._all(db, 'assessment', tid)):
                     fail('Assessment already superseded', 'assessment_conflict', 409)
             assessment = self._new(track_id=tid, attempt_id=attempt['id'], activity_id=attempt['activity_id'], activity_version=attempt['activity_version'], rubric_version=attempt['activity_version'], method=method, author_kind='self-assessment' if method == 'self' else 'chat-agent', feedback=text(p.get('feedback'), 'feedback', required=True), outcome=outcome, supersedes=supersedes, created_at=now)
+            if 'uncertainty' in p:
+                assessment['uncertainty'] = text(p['uncertainty'], 'uncertainty', 2000)
+            if 'criterion_results' in p:
+                results = p['criterion_results']
+                criteria = self._get(db, 'activity', attempt['activity_id'], tid)['criteria']
+                if not isinstance(results, list) or len(results) != len(criteria):
+                    fail('Provide exactly one result per immutable criterion')
+                clean = []
+                indices = set()
+                for item in results:
+                    if not isinstance(item, dict) or set(item) != {'index', 'outcome', 'feedback'}:
+                        fail('Criterion result requires index, outcome and feedback')
+                    index = item['index']
+                    if type(index) is not int or not 0 <= index < len(criteria) or index in indices or item['outcome'] not in OUTCOMES:
+                        fail('Criterion results must cover each criterion once with a supported outcome')
+                    indices.add(index)
+                    clean.append({'index': index, 'outcome': item['outcome'], 'feedback': text(item['feedback'], 'criterion feedback', 2000, True)})
+                if min((item['outcome'] for item in clean), key=OUTCOMES.index) != outcome:
+                    fail('Overall outcome must match the weakest criterion result')
+                assessment['criterion_results'] = sorted(clean, key=lambda item: item['index'])
             self._put(db, 'assessment', assessment)
             days = {'needs-work': 1, 'developing': 3, 'demonstrated': 7}[outcome]
-            review = next((r for r in self._all(db, 'review', tid) if r['activity_id'] == attempt['activity_id']), None)
-            exists = review is not None
-            if not exists:
-                review = self._new(track_id=tid, activity_id=attempt['activity_id'])
-            review.update(attempt_id=attempt['id'], assessment_id=assessment['id'], due_at=iso(datetime.fromisoformat(now.replace('Z', '+00:00')) + timedelta(days=days)), reason=f'Policy v1: {method} assessment {outcome}; revisit in {days} day(s). Fixed heuristic, not a mastery estimate.', policy_version=1, updated_at=now, manual=False, disputed=False)
-            self._put(db, 'review', review, exists)
-            return {'assessment': assessment, 'review': review}
+            activity = self._get(db, 'activity', attempt['activity_id'], tid)
+            objectives = activity.get('objective_ids', [])
+            reviews = []
+            for objective_id in objectives or [None]:
+                review = next((r for r in self._all(db, 'review', tid) if (r.get('objective_id') == objective_id if objective_id else not r.get('objective_id') and r['activity_id'] == attempt['activity_id'])), None)
+                exists = review is not None
+                if not exists:
+                    review = self._new(track_id=tid, activity_id=attempt['activity_id'])
+                policy = 2 if objective_id else 1
+                if objective_id:
+                    review['objective_id'] = objective_id
+                    # Corrections and extra judgments on already-known tasks
+                    # retain a learner's date; feedback on new work restarts the
+                    # automatic policy, as it does for legacy activity reviews.
+                    if review.get('manual') and attempt['id'] not in review.get('manual_attempt_ids', [review.get('attempt_id')]):
+                        review['manual'] = False
+                        review.pop('manual_attempt_ids', None)
+                review.update(activity_id=attempt['activity_id'], attempt_id=attempt['id'], assessment_id=assessment['id'], policy_version=policy, updated_at=now)
+                if objective_id:
+                    review.setdefault('manual', False)
+                    self._objective_review(db, review, now)
+                else:
+                    review.update(due_at=iso(datetime.fromisoformat(now.replace('Z', '+00:00')) + timedelta(days=days)), reason=f'Policy v1: {method} assessment {outcome}; revisit in {days} day(s). Fixed heuristic, not a mastery estimate.', manual=False, disputed=False)
+                self._put(db, 'review', review, exists)
+                reviews.append(review)
+            return {'assessment': self._safe_evidence(db, assessment, 'assessment', channel), 'review': reviews[0], 'reviews': reviews}
         if action == 'dispute':
             assessment = self._get(db, 'assessment', p.get('assessment_id'), tid)
             dispute = self._new(track_id=tid, assessment_id=assessment['id'], attempt_id=assessment['attempt_id'], reason=text(p.get('reason'), 'reason', 4000, True), created_at=now)
             self._put(db, 'dispute', dispute)
+            objective_ids = self._get(db, 'activity', assessment['activity_id'], tid).get('objective_ids', [])
             for review in self._all(db, 'review', tid):
-                if review['assessment_id'] == assessment['id']:
+                if review.get('objective_id') in objective_ids:
+                    self._objective_review(db, review, now)
+                    self._put(db, 'review', review, True)
+                elif not review.get('objective_id') and review['assessment_id'] == assessment['id']:
                     review.update(disputed=True, reason='Assessment disputed; review the evidence before relying on this schedule.', updated_at=now)
                     self._put(db, 'review', review, True)
-            return {'dispute': dispute}
+            return {'dispute': self._safe_evidence(db, dispute, 'dispute', channel)}
         if action == 'review':
             if channel != 'ui_direct':
                 fail('Manual review date changes require an explicit learner action', 'explicit_approval_required', 403)
             review = self._get(db, 'review', p.get('review_id'), tid)
-            review.update(due_at=iso(p.get('due_at')), reason='Learner manually adjusted the review date; policy v1 interval overridden.', manual=True, updated_at=now)
+            review.update(due_at=iso(p.get('due_at')), reason=f"Learner manually adjusted the review date; policy v{review['policy_version']} interval overridden.", manual=True, updated_at=now)
+            if review.get('objective_id'):
+                activity_ids = {a['id'] for a in self._all(db, 'activity', tid) if review['objective_id'] in a.get('objective_ids', [])}
+                review['manual_attempt_ids'] = [a['id'] for a in self._all(db, 'attempt', tid) if a['activity_id'] in activity_ids]
+                self._objective_review(db, review, now)
             self._put(db, 'review', review, True)
             return {'review': review}
         fail('Unknown action')

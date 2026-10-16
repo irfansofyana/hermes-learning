@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 SPEC = importlib.util.find_spec('plugin.learning_store')
@@ -139,12 +140,16 @@ class LearningStoreTests(unittest.TestCase):
             self.call('brief', revision=1, brief='Bad migration', objectives=[])
 
     def test_independent_processes_initialize_once(self):
-        fresh = str(Path(self.temp.name) / 'fresh.db')
-        code = "from plugin.learning_store import Store; import sys; print(Store(sys.argv[1]).dispatch('state', {})['store_id'])"
-        processes = [subprocess.Popen([sys.executable, '-B', '-c', code, fresh], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(6)]
-        results = [p.communicate(timeout=20) for p in processes]
-        self.assertTrue(all(p.returncode == 0 for p in processes), results)
-        self.assertEqual(len({out.strip() for out, err in results}), 1)
+        # Synchronize after imports so this exercises simultaneous journal-mode
+        # initialization, not merely concurrent process launch.
+        code = "from plugin.learning_store import Store; import sys,time; time.sleep(max(0,float(sys.argv[2])-time.monotonic())); print(Store(sys.argv[1]).dispatch('state', {})['store_id'])"
+        for index in range(3):
+            fresh = str(Path(self.temp.name) / f'fresh-{index}.db')
+            ready_at = str(time.monotonic() + 0.3)
+            processes = [subprocess.Popen([sys.executable, '-B', '-c', code, fresh, ready_at], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(12)]
+            results = [p.communicate(timeout=20) for p in processes]
+            self.assertTrue(all(p.returncode == 0 for p in processes), results)
+            self.assertEqual(len({out.strip() for out, err in results}), 1)
 
     def test_cross_track_source_and_evidence_references_are_rejected(self):
         attempt = self.attempt()

@@ -59,4 +59,22 @@ Electron opt-in was set in isolated local storage; clicking the native Capabilit
 
 The copied desktop source imports only `react` and `@hermes/plugin-sdk`; the web build uses the host's full React object (19.2.7 in the inspected web runtime), including `useId`. Build targets externalize host React. Code and teaching skills are packaged separately from test data, tokens and developer dependencies.
 
-Final verification: 39 backend/adapter/preview/packaging tests, 5 workspace recovery/validation tests, 10 historical spike Python tests, and 6 historical recovery checks passed. Both production bundles built and passed JavaScript syntax checks. Browser fault injection confirmed that a lost response retried exactly once, revoked-context rejection retained editable answer text, and accepted recommendations could be attached as curated sources.
+Initial implementation verification: 39 backend/adapter/preview/packaging tests, 5 workspace recovery/validation tests, 10 historical spike Python tests, and 6 historical recovery checks passed. Both production bundles built and passed JavaScript syntax checks. Browser fault injection confirmed that a lost response retried exactly once, revoked-context rejection retained editable answer text, and accepted recommendations could be attached as curated sources.
+
+## Learning-loop verification, 2026-10-16
+
+The follow-up implementation adds schema-1 capability flags rather than requiring a storage migration. Historical rows lacking objective links, learner preferences, generated-help content or criterion results remain readable without read-time writes. The UI checks capabilities before sending new fields. Review policy v2 follows linked objectives; unlinked activities retain policy v1.
+
+| Check | Observed result |
+| --- | --- |
+| Deterministic evaluation | All three `dev/evaluate.py` scenarios passed: explicit entry/ad hoc boundary; diagnosis → generated help → answer → feedback → next activity; and restricted nested source content. These checks make no model calls. |
+| Workspace browser | Real preview flow created three linked example activities, saved authored assistance and a verbatim answer, restored a draft after reload, saved three criterion judgments plus uncertainty, displayed objective progress, scheduled reviews, and suggested another activity. Switching activities kept drafts separate. No page errors. |
+| Setup and authoring | Optional background/goal/minutes survived proposal approval. A new diagnostic practical activity retained its objective link and code-trace schema. Future trace steps remained hidden until explicit solution reveal. |
+| Source import | A selected Markdown file was previewed without a write, then attached by the explicit Add source action. Invalid UTF-8 was rejected without creating a source. Helper tests additionally cover unsupported formats, binary content and limits. |
+| Layout and visuals | Sequence, state-machine and code-trace views rendered in the preview. Light desktop and 390×844 dark layout checks passed without horizontal page overflow. |
+| Native tutor handoff | Actual isolated Electron opened a new draft containing only the single-line resume command. It sent nothing. Returning to Learning recovered the command and second tutor request verbatim. An earlier unsent native draft remained in host persistent storage. Zero page errors, host sessions/messages, learner answers or assessments were created. No provider was configured. The same temporary host `Path` workaround described above was required. |
+| Live tutor behavior | Two baseline and two final CLI conversations used the configured model in isolated homes. Baseline reproduced a generated hint with no saved event. Final saved the exact hint before showing it; tool argument, return, stored event and final response matched. Explanation-only cases made no learning writes. See the [live evaluation report](evaluations/live-tutoring-2026-10-16.md) for isolation, model, observations and limits. |
+
+The native handoff prepares two separate messages because Hermes parses the entire slash-command argument. The learner sends the resume command first, waits for confirmation, then copies the tutor request into the same conversation. This check establishes composer preparation and recovery, not a complete live tutoring exchange through Electron. Messaging transports and conversation-bound authorization remain outside this verification.
+
+The repeatable browser check is `dev/check-workspace.mjs`; its setup and fresh-store requirement are documented in [dev/README.md](../dev/README.md). Full suite/build/package results for this pass are recorded in the [implementation plan](superpowers/plans/2026-10-16-learning-loop.md).

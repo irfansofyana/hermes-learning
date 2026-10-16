@@ -1,6 +1,6 @@
 # Architecture proposal
 
-Status: revised proposal for review, not implementation approval. [Requirements](requirements.md) define behavior and acceptance.
+Status: design baseline with the implemented learning-loop contract below. [Requirements](requirements.md) remain the broader product roadmap; runtime verification is recorded in [compatibility](compatibility.md).
 
 ```text
 Desktop plugin -------- HTTP API ----+
@@ -14,6 +14,18 @@ Teaching skills + Humanizer guide agent behavior
 The learning service validates explicit tracking-context authorization, authoring, evidence, assistance events, review policy, source disclosure, and durable changes. Default ad hoc chats do not trigger plugin learning-record writes or automatic personal-track lookup. Merely loading a skill or opening an overview is not enrollment. HTTP and tools are adapters over this service. Skills guide teaching but do not bypass validation. Resolve the profile data path per operation, not at import time. Do not modify Hermes conversation tables.
 
 Activities have immutable assessed versions and pre-attempt criteria. Agent-authored and learner-authored content are attributable. UI answers commit as awaiting assessment without a live chat. Self-assessment and agent review are separate records. Backend model inference is deferred pending a host-inference probe; the UI must explain chat handoffs.
+
+## Implemented learning loop
+
+The additive API/schema-1 contract exposes capability flags for objective evidence, generated help and structured visuals. Old stores and legacy activities remain readable. New activity versions snapshot their objective IDs/titles, purpose and conceptual/practical competency; changing a track objective title gives it a new identity without rewriting earlier evidence.
+
+Read-only projections join attempts, assistance, active assessments and disputes to produce objective progress and one next action per track. Pending assessment and disputes take precedence over more practice. Conceptual and practical summaries remain separate; successful work in one dimension does not erase weaker evidence in the other. The latest feedback record is labeled separately from the summary's basis. No progress percentage is presented as mastery.
+
+Generated help stores the exact text with author/channel attribution and an idempotent request ID. Attempt assistance follows activity revisions, and nested help and feedback obey source disclosure policy. Assessments can record complete criterion results and uncertainty. Objective-linked reviews use policy v2; legacy unlinked activities retain policy v1. Both use transparent 1/3/7-day intervals. Review suggestions prefer another available unattempted activity on the objective.
+
+The shared UI imports selected UTF-8 text/Markdown/code into an editable source form before attachment. Sequence, state-machine and code-trace components render bounded data, with hidden future steps enforced by the service. Neither imported nor visualized code executes. Desktop chat preparation uses the host composer API; the explicit resume command and tutor request are separate messages. A copyable fallback remains available.
+
+See the [contract and validation scope](superpowers/specs/2026-10-16-learning-loop.md) and [evaluation guide](evaluations/tutoring.md). Deterministic evaluations establish record behavior; a limited live-model evaluation is reported separately.
 
 Candidate entities: Exploration/LearningBrief, SourceRecommendation, Track, Objective, Source, SourceLocator, ActivityVersion, ActivityRun, AssistanceEvent, Attempt, Assessment, ReviewItem, Visualization, Artifact. An exploration can exist after explicit persistence opt-in but before any approved track; it stores learner-stated interests, assumptions, unresolved choices, candidate directions/materials, and approval status. Accepted recommendations are not automatically downloaded or authorized for model sharing. Misconception/open-question notes attach to objectives. Durable session references are optional provenance, not the resume mechanism.
 

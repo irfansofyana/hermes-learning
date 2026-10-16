@@ -129,6 +129,39 @@ class AdapterTests(unittest.TestCase):
             self.plugin.command('approve context 2')
             self.assertEqual(dispatch.call_args.args, ('approve', {'context_id':'context', 'revision':2}))
 
+    def test_learning_loop_contract_reaches_real_service(self):
+        runtime = self.plugin.runtime
+        with tempfile.TemporaryDirectory() as tmp:
+            service = runtime.Store(Path(tmp) / 'data.db')
+            with patch.object(runtime, 'store', return_value=service):
+                entry = runtime.action('start', {'title':'Trace learning', 'learner_profile':{'minutes':20}})
+                context = {'context_id':entry['context_id']}
+                track = runtime.action('brief', {**context, 'revision':1, 'brief':'Explain a retry', 'objectives':['Trace duplicates'], 'learner_profile':{}})['track']
+                activity = runtime.action('activity', {**context, 'title':'Trace', 'kind':'trace', 'prompt':'Predict x', 'criteria':['Correct value'], 'solution':'One', 'objective_ids':[track['objective_details'][0]['id']], 'competency':'conceptual', 'purpose':'diagnostic', 'visual':{'type':'code-trace', 'code':'x = 1', 'language':'python', 'steps':[{'line':1, 'label':'Assign', 'variables':[{'name':'x','value':'1'}]}]}})['activity']
+                run = runtime.action('run', {**context, 'activity_id':activity['id']})
+                result = runtime.action('help', {**context, 'run_id':run['run_id'], 'level':'nudge', 'content':'Inspect the assignment', 'request_id':'hint-1'}, channel='chat_relayed')
+                self.assertEqual(result['help']['content'], 'Inspect the assignment')
+                attempt = runtime.action('submit', {**context, 'run_id':run['run_id'], 'answer':'One'})['attempt']
+                result = runtime.action('assess', {**context, 'attempt_id':attempt['id'], 'method':'agent', 'outcome':'demonstrated', 'feedback':'Correct trace', 'uncertainty':'Single example', 'criterion_results':[{'index':0,'outcome':'demonstrated','feedback':'Correct value'}]}, channel='chat_relayed')
+                self.assertEqual(result['assessment']['method'], 'agent')
+                state = runtime.action('state', {})
+                self.assertEqual(state['objective_progress'][0]['latest_assessment']['uncertainty'], 'Single example')
+                for visual in ({'type':'code-trace','code':'x', 'steps':[{'line':True,'label':'Bad'}]}, {'type':'state-machine','states':[{'id':'a','label':'A'}],'initial':'a','steps':[{'from':'a','to':'missing','label':'Bad'}]}):
+                    with self.assertRaises(runtime.LearningError):
+                        runtime.action('activity', {**context, 'title':'Bad','kind':'trace','prompt':'x','criteria':['x'],'solution':'x','visual':visual})
+
+    def test_utf8_import_limit_counts_text_instead_of_json_escape_overhead(self):
+        runtime = self.plugin.runtime
+        with tempfile.TemporaryDirectory() as tmp:
+            service = runtime.Store(Path(tmp) / 'data.db')
+            with patch.object(runtime, 'store', return_value=service):
+                context = runtime.action('start', {'title':'Unicode source'})['context_id']
+                excerpt = '学' * 50000
+                source = runtime.action('source', {'context_id':context, 'title':'Notes', 'kind':'notes', 'sharing':'selected-excerpts', 'excerpt':excerpt})['source']
+                self.assertEqual(runtime.action('source_read', {'source_id':source['id']})['source']['excerpt'], excerpt)
+                with self.assertRaises(runtime.LearningError):
+                    runtime.action('source', {'context_id':context, 'title':'Oversize', 'kind':'notes', 'sharing':'selected-excerpts', 'excerpt':excerpt + 'x'})
+
 
 try:
     import fastapi

@@ -33,24 +33,42 @@ def array(items, maximum=100):
 ID = string(100)
 CONTEXT = {'context_id': ID}
 REVISION = {'revision': {'type': 'integer', 'minimum': 0}}
+def object_schema(properties, required=()):
+    return {'type': 'object', 'properties': properties, 'required': list(required), 'additionalProperties': False}
+
+
+LEARNER_PROFILE = object_schema({'background': string(2000, 0), 'goal': string(2000, 0), 'minutes': {'type': 'integer', 'minimum': 1, 'maximum': 240}})
+VISUAL_NODE = object_schema({'id': string(60), 'label': string(150)}, ['id', 'label'])
+VISUAL_COMMON = {'schema_version': {'type': 'integer', 'minimum': 1, 'maximum': 1}, 'title': string(300, 0), 'visible_steps': {'type': 'integer', 'minimum': 0, 'maximum': 30}}
+TRANSITION = object_schema({'from': string(60), 'to': string(60), 'label': string(300), 'explanation': string(2000, 0)}, ['from', 'to', 'label'])
+TRACE_STEP = object_schema({'line': {'type': 'integer', 'minimum': 1, 'maximum': 12000}, 'label': string(300), 'explanation': string(2000, 0), 'variables': array(object_schema({'name': string(150), 'value': string(2000, 0)}, ['name', 'value']), 20)}, ['line', 'label'])
+VISUAL = {'anyOf': [
+    {'type': 'null'},
+    object_schema({**VISUAL_COMMON, 'type': enum('sequence'), 'participants': array(VISUAL_NODE, 10), 'steps': array(TRANSITION, 30)}, ['type', 'participants', 'steps']),
+    object_schema({**VISUAL_COMMON, 'type': enum('state-machine'), 'states': array(VISUAL_NODE, 20), 'initial': string(60), 'steps': array(TRANSITION, 30)}, ['type', 'states', 'initial', 'steps']),
+    object_schema({**VISUAL_COMMON, 'type': enum('code-trace'), 'code': string(12000), 'language': string(40, 0), 'steps': array(TRACE_STEP, 30)}, ['type', 'code', 'steps']),
+]}
+CRITERION_RESULT = object_schema({'index': {'type': 'integer', 'minimum': 0, 'maximum': 29}, 'outcome': enum('needs-work', 'developing', 'demonstrated'), 'feedback': string(2000)}, ['index', 'outcome', 'feedback'])
+
+
 # Optional parameters are omitted from required; service applies their defaults.
 SPECS = {
     'state': ({}, []),
-    'start': ({'title': string(300), 'interest': string(12000, 0)}, ['title']),
+    'start': ({'title': string(300), 'interest': string(12000, 0), 'learner_profile': LEARNER_PROFILE}, ['title']),
     'resume': ({'track_id': ID}, ['track_id']),
     'leave': (CONTEXT, ['context_id']),
     'track': ({'track_id': ID}, ['track_id']),
-    'brief': ({**CONTEXT, **REVISION, 'brief': string(12000), 'objectives': array(string(1000), 30), 'assumptions': array(string(1000), 30), 'open_questions': array(string(1000), 30)}, ['context_id', 'revision', 'brief', 'objectives']),
+    'brief': ({**CONTEXT, **REVISION, 'brief': string(12000), 'learner_profile': LEARNER_PROFILE, 'objectives': array(string(1000), 30), 'assumptions': array(string(1000), 30), 'open_questions': array(string(1000), 30)}, ['context_id', 'revision', 'brief', 'objectives']),
     'approve': ({**CONTEXT, **REVISION}, ['context_id', 'revision']),
     'track_status': ({**CONTEXT, **REVISION, 'status': enum('active', 'paused', 'archived')}, ['context_id', 'revision', 'status']),
     'source': ({**CONTEXT, 'recommendation_id': ID, 'title': string(300), 'kind': string(100), 'url': string(2000, 0), 'locator': string(2000, 0), 'excerpt': string(50000, 0), 'sharing': enum('metadata-only', 'selected-excerpts', 'full-text'), 'verification': string(1000)}, ['context_id', 'title', 'kind', 'sharing']),
     'source_read': ({'source_id': ID}, ['source_id']),
-    'activity': ({**CONTEXT, 'title': string(300), 'kind': enum('explanation', 'prediction', 'trace', 'build'), 'prompt': string(12000), 'description': string(12000, 0), 'criteria': {'anyOf': [string(2000), array(string(2000), 30)]}, 'solution': string(12000), 'hints': {'anyOf': [array(string(5000), 3), {'type': 'object', 'properties': {key: string(5000) for key in ('nudge', 'targeted-hint', 'worked-step')}, 'required': [], 'additionalProperties': False}]}, 'source_ids': array(ID, 30), 'visual': {'anyOf': [{'type': 'null'}, {'type': 'object', 'properties': {'type': enum('sequence'), 'schema_version': {'type': 'integer', 'minimum': 1, 'maximum': 1}, 'title': string(300, 0), 'participants': array({'type': 'object', 'properties': {'id': string(60), 'label': string(150)}, 'required': ['id', 'label'], 'additionalProperties': False}, 10), 'steps': array({'type': 'object', 'properties': {'from': string(60), 'to': string(60), 'label': string(300), 'explanation': string(2000, 0)}, 'required': ['from', 'to', 'label'], 'additionalProperties': False}, 30), 'visible_steps': {'type': 'integer', 'minimum': 0, 'maximum': 30}}, 'required': ['type', 'participants', 'steps'], 'additionalProperties': False}]}}, ['context_id', 'title', 'kind', 'prompt', 'criteria', 'solution']),
+    'activity': ({**CONTEXT, 'title': string(300), 'kind': enum('explanation', 'prediction', 'trace', 'build'), 'prompt': string(12000), 'description': string(12000, 0), 'criteria': {'anyOf': [string(2000), array(string(2000), 30)]}, 'solution': string(12000), 'hints': {'anyOf': [array(string(5000), 3), {'type': 'object', 'properties': {key: string(5000) for key in ('nudge', 'targeted-hint', 'worked-step')}, 'required': [], 'additionalProperties': False}]}, 'source_ids': array(ID, 30), 'objective_ids': array(ID, 30), 'competency': enum('conceptual', 'practical', 'both'), 'purpose': enum('diagnostic', 'practice', 'transfer'), 'visual': VISUAL}, ['context_id', 'title', 'kind', 'prompt', 'criteria', 'solution']),
     'activity_read': ({'activity_id': ID, **CONTEXT}, ['activity_id']),
     'run': ({**CONTEXT, 'activity_id': ID}, ['context_id', 'activity_id']),
-    'help': ({**CONTEXT, 'run_id': ID, 'level': enum('nudge', 'targeted-hint', 'worked-step', 'full-solution-shown')}, ['context_id', 'run_id', 'level']),
+    'help': ({**CONTEXT, 'run_id': ID, 'level': enum('nudge', 'targeted-hint', 'worked-step', 'full-solution-shown'), 'content': string(5000), 'request_id': string(100)}, ['context_id', 'run_id', 'level']),
     'submit': ({**CONTEXT, 'run_id': ID, 'answer': string(30000)}, ['context_id', 'run_id', 'answer']),
-    'assess': ({**CONTEXT, 'attempt_id': ID, 'method': enum('self', 'agent'), 'feedback': string(12000), 'outcome': enum('needs-work', 'developing', 'demonstrated'), 'supersedes': ID}, ['context_id', 'attempt_id', 'method', 'feedback', 'outcome']),
+    'assess': ({**CONTEXT, 'attempt_id': ID, 'method': enum('self', 'agent'), 'feedback': string(12000), 'outcome': enum('needs-work', 'developing', 'demonstrated'), 'supersedes': ID, 'criterion_results': array(CRITERION_RESULT, 30), 'uncertainty': string(2000, 0)}, ['context_id', 'attempt_id', 'method', 'feedback', 'outcome']),
     'dispute': ({**CONTEXT, 'assessment_id': ID, 'reason': string(4000)}, ['context_id', 'assessment_id', 'reason']),
     'review': ({**CONTEXT, 'review_id': ID, 'due_at': string(80)}, ['context_id', 'review_id', 'due_at']),
     'resume_brief': ({'track_id': ID}, ['track_id']),
@@ -119,7 +137,7 @@ def action(name, params, *, channel='ui_direct', api_version=1):
         raise LearningError('This action requires the human workspace or explicit slash command')
     _validate(params, parameters(name))
     try:
-        size = len(json.dumps(params, allow_nan=False).encode('utf-8'))
+        size = len(json.dumps(params, allow_nan=False, ensure_ascii=False).encode('utf-8'))
     except (TypeError, ValueError, RecursionError) as exc:
         raise LearningError('Parameters must be finite JSON values') from exc
     if size > 256000:

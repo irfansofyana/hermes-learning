@@ -1,11 +1,13 @@
 import React,{useState,useEffect,useId,useRef} from 'react';
 import {Button} from './primitives.jsx';
+import {visibleSteps} from './learning.mjs';
 export function Sequence({visual}) {
  const [index,setIndex]=useState(0),[available,setAvailable]=useState(650); const marker=useId().replaceAll(':',''),container=useRef(null);
  useEffect(()=>{if(!container.current||typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(entries=>setAvailable(Math.max(0,entries[0].contentRect.width)));observer.observe(container.current);return()=>observer.disconnect();},[visual?.type]);
- useEffect(()=>setIndex(0),[visual?.title]);
- if(!visual || visual.type!=='sequence' || !Array.isArray(visual.steps)||!visual.steps.length) return <p className="hl-muted">No visual has been added to this activity.</p>;
- const participants=visual.participants||[]; const steps=visual.steps;
+ useEffect(()=>setIndex(0),[visual?.title,visual?.steps]);
+ if(!visual || visual.type!=='sequence') return <p className="hl-muted">No visual has been added to this activity.</p>;
+ const participants=visual.participants||[]; const steps=visibleSteps(visual);
+ if(!steps.length)return <p className="hl-muted">This sequence opens after you submit or reveal the solution.</p>;
  const current=Math.min(index,steps.length-1), shown=steps.slice(0,current+1);
  const width=Math.max(340,available,participants.length*150), height=90+shown.length*62;
  const shorten=(value,limit)=>value.length>limit?`${value.slice(0,limit-1)}…`:value;

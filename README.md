@@ -8,12 +8,14 @@ A personal learning workspace for Hermes Agent: source-grounded study, interacti
 
 ## What is implemented
 
-- A shared React workspace with a track navigator, study/source/evidence views, interactive sequences, light/dark themes, keyboard controls, narrow layouts, and explicit chat handoffs.
-- Saved discovery and proposed paths, with separate learner approval. Start from a vague curiosity, a goal, or a source.
+- A shared React workspace with study, progress, sources and evidence views; sequence, state-machine and code-trace visuals; light/dark themes, keyboard controls and narrow layouts.
+- Saved discovery and proposed paths, optional background/goal/session time, and separate learner approval. Start from a vague curiosity, a goal, or a source.
 - Candidate source recommendations with accept/decline actions, curated excerpts, source locators and model-sharing policies, and conservative quote matching.
-- Authored explanation, prediction, trace, and build activities; immutable revisions and precommitted criteria; recorded hints and solution reveals.
+- Explanation, prediction, trace and build activities linked to objectives, with diagnostic/practice/transfer purposes and conceptual/practical evidence. Immutable revisions preserve the original prompt and criteria.
+- Authored and generated hints saved with their actual content and attribution; generated-help retries preserve one event. Local UTF-8 text, Markdown and code import offers an editable preview before attachment.
 - Verbatim answers with server-issued retry identity, local draft recovery, assistance/channel provenance, separate self/agent assessments, disputes, and append-only corrections.
-- An inspectable review queue, manual deferral, archive/pause/resume, safe JSON export and consistent SQLite backup.
+- Criterion-level feedback, uncertainty, objective progress and a suggested next step, including pending assessments and disputes. Linked activities schedule objective reviews and suggest another available activity for practice.
+- An inspectable review queue, manual deferral, archive/pause/resume, safe JSON export and consistent SQLite backup. Desktop prepares the resume command in a new chat; both clients provide the follow-up tutor request to copy.
 - Hermes backend tools, `/learning-track` commands, an authenticated dashboard adapter, a native desktop adapter, and original teaching/Humanizer guidance.
 
 Ordinary educational chat remains ad hoc. Opening the workspace reads records but does not enroll another conversation. Explicit start/resume creates a revocable tracking context. Submission saves an answer as awaiting assessment; no model call or automatic grade happens behind the button. The authored retry example is optional and creates records only when explicitly started.
@@ -80,20 +82,21 @@ Run the backend suite with the same Python environment that supplies Hermes's Fa
 /path/to/hermes-agent/.venv/bin/python -B -W error::ResourceWarning -m unittest discover -s tests -v
 npm --prefix ui test
 npm --prefix ui run build
+python3 -B dev/evaluate.py
 /path/to/hermes-agent/.venv/bin/python -B -W error::ResourceWarning -m unittest discover -s spikes/001-cross-client-learning/tests -v
 node spikes/001-cross-client-learning/tests/check_recovery.cjs
 ```
 
-The new service tests cover consent/revocation, cross-track references, source policy, version/key gating, retries, assistance, corrections, fixed-clock scheduling, concurrent startup, and backup restoration. Browser checks exercised the real preview and real host flow, including reload recovery, answer/assessment writes, desktop-to-web continuity, and dark/narrow layouts. Detailed boundaries are in [compatibility](docs/compatibility.md).
+The service tests cover consent/revocation, cross-track references, source policy, version/key gating, retries, assistance, corrections, objective evidence, fixed-clock scheduling, concurrent startup, and backup restoration. The deterministic evaluation checks complete tool flows; it does not evaluate a model's teaching. See the [tutoring evaluation guide](docs/evaluations/tutoring.md) and [compatibility](docs/compatibility.md) for observed results and runtime boundaries.
 
 ## Remaining product boundaries
 
 - Conversation-bound consent needs a verified Hermes identity bridge. Current contexts are revocable private capabilities, not authenticated conversation identities. This is a personal single-user plugin.
 - Chat authoring uses Hermes tools; no new backend inference, search service, PDF ingestion, repository execution, or automatic full-book processing is included.
 - Reference verification is author-reported. Source protection follows declared source references; it cannot retrospectively retract content already shared with a model.
-- Review policy v1 is a transparent 1/3/7-day heuristic per immutable activity, not a calibrated mastery score or the proposed objective-level review system.
-- Teaching quality, arbitrary generated-help capture, structured conceptual/practical competencies, and actual messaging-channel behavior need further evaluation or implementation. Real skill loading does not prove model adherence.
-- Native deep links, arbitrary remote/proxy topologies, offline writes, multi-user operation, and all-version host support are not claimed.
+- Review uses a transparent 1/3/7-day heuristic: policy v2 follows linked objectives, while unlinked legacy activities retain policy v1. Evidence summaries are not calibrated mastery or retention estimates.
+- Generated-help capture requires the tutor to use the help tool before giving assistance. Teaching quality and actual messaging-channel behavior need ongoing evaluation; skill loading alone does not prove adherence.
+- Native chat preparation depends on the inspected desktop composer API, preserves existing drafts, and does not send messages. Arbitrary remote/proxy topologies, offline writes, multi-user operation, and all-version host support are not claimed.
 
 ## Product documents
 
