@@ -1,5 +1,26 @@
 # Compatibility and verification boundaries
 
+## Integrated workspace (current)
+
+The current Desktop and web plugin generates a path and first lesson from a topic, project, or supplied material, then keeps the tutor beside the lesson. It uses the configured Hermes model through public host conversation APIs. Continue restores the saved lesson position and durable conversation; the primary workflow requires no slash commands or chat switching.
+
+Verified against the local Hermes v0.22.2 checkout at `d923a5eb487` in isolated profiles:
+
+- A real configured model generated a two-lesson outline and published the first lesson through the learning tools in the actual web dashboard. The generation job completed and the conversation binding persisted.
+- The actual Electron plugin reopened that web-created lesson and conversation, sent a follow-up to the live model, and received its answer inside Learning. No page errors occurred in either check.
+- The preview browser check exercises project/source input, lesson generation, chat, next lesson, read progress, reload/Continue, and mobile dark layout using a **labelled simulated tutor** against the real store. Separate checks covered Stop/retry and failed source retrieval.
+- Regression tests cover cancelled preparation, uncertain delivery, reconnect, missing conversations, source policy, idempotent publication, and preservation of legacy assessed evidence.
+
+The host bootstrap required the existing temporary `Path` annotation workaround described below. The daily Hermes installation was not changed or restarted. Live checks used a temporary access-only credential copy and did not copy refresh credentials.
+
+Supported source imports are UTF-8 text, Markdown, and code, plus pasted passages and HTTP(S) source/repository links. Links begin unread; retrieval depends on host reading tools. Retrieval status is agent-reported, not independent verification. PDF/image ingestion, automatic repository execution, offline model work, multi-user authorization, and arbitrary host versions are not supported by this verification. Published lessons and outlines are immutable; requesting different assumptions changes the tutor conversation rather than rewriting the saved path.
+
+Desktop uses `host.request` and `host.onEvent`; web uses an authenticated host WebSocket. Approval and clarification requests require explicit learner responses. Conversation bindings are scoped to the learning store/profile; context capabilities remain revocable permissions rather than authenticated conversation identities. The current manifest declares 21 tools.
+
+## Earlier implementation evidence
+
+The sections below document earlier record-management and chat-handoff releases. References to path approval, 17 tools, or preparing commands describe those releases and the retained **Learning records** view, not the current primary experience.
+
 Hermes Learning targets the plugin registration and dashboard extension APIs inspected in the local Hermes source at commit `d923a5eb487` on 2026-10-16. Source inspection is not a claim that this release was installed or exercised in every host. The daily instance was not installed into, restarted, or modified.
 
 ## Adapter contract

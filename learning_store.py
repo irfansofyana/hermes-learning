@@ -19,10 +19,10 @@ from urllib.parse import urlsplit
 API_VERSION = SCHEMA_VERSION = 1
 LEVELS = ['none', 'nudge', 'targeted-hint', 'worked-step', 'full-solution-shown']
 OUTCOMES = ['needs-work', 'developing', 'demonstrated']
-CAPABILITIES = ['objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1']
+CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1']
 WITHHELD = 'Content withheld by source-sharing policy.'
-READS = {'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
-WRITES = {'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
+READS = {'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
+WRITES = {'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
 KINDS = ('track', 'source', 'activity', 'attempt', 'assessment', 'review', 'dispute', 'help', 'run', 'context', 'recommendation')
 
 
@@ -466,6 +466,260 @@ class Store:
             fail('visible_steps is outside the visual')
         return {**result, 'steps': clean_steps, 'visible_steps': visible}
 
+    def _course_job_view(self, job):
+        return {key: value for key, value in job.items() if key not in ('context_id', 'request_hash')}
+
+    def _course_data(self, db, tid):
+        records = self._all(db, 'course', tid)
+        return records[0] if records else None
+
+    def _course_dispatch(self, db, action, p, channel):
+        now = iso(self.clock())
+        ui_actions = {'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
+        if action in ui_actions and channel != 'ui_direct':
+            fail('This course action requires the human workspace', 'explicit_entry_required', 403)
+        if action == 'course_read':
+            track = self._get(db, 'track', p.get('track_id'))
+            tid = track['id']
+            course = self._course_data(db, tid) or {}
+            lessons = self._all(db, 'lesson', tid)
+            for lesson in lessons:
+                if channel == 'chat_relayed' and any(self._get(db, 'source', sid, tid)['sharing'] == 'metadata-only' for sid in lesson['source_ids']):
+                    lesson.update(content=WITHHELD, title='Lesson with restricted source', visual=None, content_withheld=True)
+            return {'track': self._track_view(track), 'outline': course.get('outline', []),
+                    'lessons': lessons, 'position': course.get('position', {'lesson_key': None, 'completed': []}),
+                    'binding': course.get('binding') if channel == 'ui_direct' else None,
+                    'jobs': [self._course_job_view(job) for job in self._all(db, 'course_job', tid)],
+                    'sources': [{**self._safe_source(source, channel, content=True),
+                                 'read_status': source.get('read_status', 'provided' if source['excerpt'] else 'unread')}
+                                for source in self._all(db, 'source', tid)]}
+        if action == 'course_start':
+            request_id = text(p.get('request_id'), 'request_id', 100, True)
+            title = text(p.get('title'), 'title', 300, True)
+            interest = text(p.get('interest', title), 'interest', 12000, True)
+            intent, level = p.get('intent'), p.get('level')
+            if intent not in ('topic', 'project', 'sources') or level not in ('beginner', 'intermediate', 'advanced'):
+                fail('Unsupported course intent or level')
+            materials = p.get('materials', [])
+            if not isinstance(materials, list) or len(materials) > 20:
+                fail('Provide at most 20 source materials')
+            size = 0
+            byte_size = 0
+            for material in materials:
+                if not isinstance(material, dict) or set(material) - {'title', 'kind', 'url', 'locator', 'excerpt', 'sharing'}:
+                    fail('Unsupported material fields')
+                excerpt = text(material.get('excerpt', ''), 'excerpt', 50000)
+                size += len(excerpt)
+                byte_size += len(excerpt.encode('utf-8'))
+            if size > 100000 or byte_size > 200000:
+                fail('Materials exceed 100000 characters or 200000 UTF-8 bytes', 'too_large', 413)
+            payload = {'title': title, 'interest': interest, 'intent': intent, 'level': level, 'materials': materials}
+            digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            existing = next((r for r in self._all(db, 'course_request') if r['request_id'] == request_id), None)
+            if existing:
+                if existing['request_hash'] != digest:
+                    fail('Request ID already used with different input', 'idempotency_conflict', 409)
+                self._context(db, existing['context_id'])
+                return {key: existing[key] for key in ('track_id', 'context_id', 'job_id')}
+            started = self._dispatch(db, 'start', {'title': title, 'interest': interest}, channel)
+            tid, context_id = started['track_id'], started['context_id']
+            track = self._get(db, 'track', tid)
+            track.update(status='active', intent=intent, level=level)
+            self._put(db, 'track', track, True)
+            self._put(db, 'course', self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None,
+                                             position={'lesson_key': None, 'completed': []}, created_at=now))
+            for material in materials:
+                self._dispatch(db, 'source', {**material, 'context_id': context_id}, channel)
+            job = self._course_new_job(db, track, context_id, request_id, None, now)
+            self._put(db, 'course_request', self._new(**started, job_id=job['id'], request_id=request_id, request_hash=digest))
+            return {**started, 'job_id': job['id']}
+        if action == 'course_open':
+            track = self._get(db, 'track', p.get('track_id'))
+            recoverable = []
+            for job in self._all(db, 'course_job', track['id']):
+                if job['status'] not in ('queued', 'generating'):
+                    continue
+                context = self._get(db, 'context', job['context_id'], track['id'])
+                if context['active'] and track['status'] not in ('paused', 'archived'):
+                    recoverable.append(job)
+                else:
+                    job.update(status='stopped', error='Generation context ended; explicitly generate again', updated_at=now)
+                    self._put(db, 'course_job', job, True)
+            if recoverable:
+                # Explicit Continue recovers the latest unfinished request's
+                # authority, including Stop, without starting another model turn.
+                job = recoverable[-1]
+                return {'track_id': track['id'], 'context_id': job['context_id'],
+                        'job_id': job['id'], 'lesson_key': job['lesson_key']}
+            return self._dispatch(db, 'resume', p, channel)
+        context, track = self._context(db, p.get('context_id'))
+        tid = track['id']
+        course = self._course_data(db, tid)
+        if course is None:
+            course = self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None,
+                               position={'lesson_key': None, 'completed': []}, created_at=now)
+            self._put(db, 'course', course)
+        if action == 'course_generate':
+            request_id = text(p.get('request_id'), 'request_id', 100, True)
+            lesson_key = p.get('lesson_key')
+            if lesson_key is not None:
+                text(lesson_key, 'lesson_key', 80, True)
+                if lesson_key not in {item['key'] for item in course['outline']}:
+                    fail('Lesson must belong to the saved outline')
+            existing = next((job for job in self._all(db, 'course_job', tid) if job['request_id'] == request_id), None)
+            if existing:
+                if existing['context_id'] != context['id'] or existing['requested_lesson_key'] != lesson_key:
+                    fail('Request ID already used with different context or lesson', 'idempotency_conflict', 409)
+                return {'job_id': existing['id']}
+            target = lesson_key or (course['outline'][0]['key'] if course['outline'] else None)
+            if target and any(lesson['key'] == target for lesson in self._all(db, 'lesson', tid)):
+                fail('Lesson is already published', 'revision_conflict', 409)
+            # A new explicit request supersedes unfinished work for this same target.
+            for job in self._all(db, 'course_job', tid):
+                if job['status'] in ('queued', 'generating') and job['lesson_key'] == target:
+                    job.update(status='stopped', error='Superseded by a new generation request', updated_at=now)
+                    self._put(db, 'course_job', job, True)
+            job = self._course_new_job(db, track, context['id'], request_id, lesson_key, now)
+            return {'job_id': job['id']}
+        if action == 'course_bind':
+            binding = {'session_id': text(p.get('session_id'), 'session_id', 200, True),
+                       'scope': text(p.get('scope'), 'scope', 2000, True)}
+            course['binding'] = binding
+            self._put(db, 'course', course, True)
+            return binding
+        if action == 'course_position':
+            keys = {lesson['key'] for lesson in self._all(db, 'lesson', tid)}
+            key = text(p.get('lesson_key'), 'lesson_key', 80, True)
+            completed = strings(p.get('completed', course['position']['completed']), 'completed', 50, 80)
+            if key not in keys or len(set(completed)) != len(completed) or set(completed) - keys:
+                fail('Reading position and completion must refer to published lessons')
+            course['position'] = {'lesson_key': key, 'completed': completed}
+            self._put(db, 'course', course, True)
+            return course['position']
+        job = self._get(db, 'course_job', p.get('job_id'), tid)
+        if job['context_id'] != context['id']:
+            fail('Generation job belongs to another context', 'context_mismatch', 403)
+        if action == 'course_source':
+            if job['status'] not in ('queued', 'generating'):
+                fail('Generation job has ended', 'job_closed', 409)
+            source = self._get(db, 'source', p.get('source_id'), tid)
+            if source['sharing'] == 'metadata-only':
+                fail('Metadata-only sources do not authorize retrieval', 'source_restricted', 403)
+            if not source['url'] or (source['excerpt'] and not source.get('retrieval_job_id')):
+                fail('Only an explicitly supplied unread URL supports retrieval results')
+            status = p.get('status')
+            if status not in ('read', 'failed', 'unsupported'):
+                fail('Unsupported source retrieval status')
+            excerpt = text(p.get('excerpt', ''), 'retrieved excerpt', 50000, status == 'read')
+            error = text(p.get('error', ''), 'retrieval error', 2000, status != 'read')
+            if status != 'read' and excerpt:
+                fail('Failed or unsupported retrieval must not include source text')
+            if status == 'read' and error:
+                fail('Successful retrieval must not include an error')
+            if source.get('read_status') == 'read':
+                if status != 'read' or excerpt != source['excerpt']:
+                    fail('Retrieved source content is immutable', 'revision_conflict', 409)
+                return {'source': self._safe_source(source, channel, content=True)}
+            others = [item['excerpt'] for item in self._all(db, 'source', tid) if item['id'] != source['id']]
+            if sum(map(len, others)) + len(excerpt) > 100000 or sum(len(item.encode('utf-8')) for item in others) + len(excerpt.encode('utf-8')) > 200000:
+                fail('Retrieved material exceeds course source limits', 'too_large', 413)
+            source.update(read_status=status, retrieval_error=error, excerpt=excerpt,
+                          excerpt_hash=hashlib.sha256(excerpt.encode()).hexdigest(), retrieval_job_id=job['id'],
+                          verification='agent-reported retrieval; not independently verified' if status == 'read' else 'unverified',
+                          updated_at=now)
+            self._put(db, 'source', source, True)
+            return {'source': self._safe_source(source, channel, content=True)}
+        if action == 'course_job_status':
+            status = p.get('status')
+            if status not in ('stopped', 'failed'):
+                fail('Only stopped or failed may be set explicitly')
+            if job['status'] == 'completed':
+                return self._course_job_view(job)
+            job.update(status=status, error=text(p.get('error', ''), 'error', 2000), updated_at=now)
+            self._put(db, 'course_job', job, True)
+            return self._course_job_view(job)
+        if action == 'course_plan':
+            if not job['allow_outline']:
+                fail('This generation request does not authorize a new outline', 'job_scope', 403)
+            lessons = p.get('lessons')
+            if not isinstance(lessons, list) or not 1 <= len(lessons) <= 50:
+                fail('An outline requires 1–50 lessons')
+            cleaned = []
+            seen = set()
+            for item in lessons:
+                if not isinstance(item, dict) or set(item) != {'key', 'title', 'goal'}:
+                    fail('Outline entries require key, title and goal')
+                key = text(item['key'], 'lesson key', 80, True)
+                if not all(c.isascii() and (c.isalnum() or c in '_-') for c in key) or key in seen:
+                    fail('Lesson keys must be unique ASCII letters, numbers, underscores or hyphens')
+                seen.add(key)
+                cleaned.append({'key': key, 'title': text(item['title'], 'lesson title', 300, True),
+                                'goal': text(item['goal'], 'lesson goal', 2000, True)})
+            publication = {'outline': cleaned, 'summary': text(p.get('summary'), 'summary', 12000, True),
+                           'assumptions': strings(p.get('assumptions', []), 'assumptions')}
+            digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
+            if job.get('plan_hash'):
+                if job['plan_hash'] != digest:
+                    fail('Outline already published with different content', 'revision_conflict', 409)
+                return {'outline': course['outline']}
+            if job['status'] not in ('queued', 'generating') or course['outline']:
+                fail('Generation job no longer authorizes this outline', 'job_closed', 409)
+            course.update(publication)
+            self._put(db, 'course', course, True)
+            job.update(plan_hash=digest, lesson_key=cleaned[0]['key'], status='generating', updated_at=now)
+            self._put(db, 'course_job', job, True)
+            # Legacy objective IDs derive from their titles. Replacing them
+            # would orphan progress and prevent new practice using old evidence.
+            # The course record already owns its generated summary and outline.
+            if track.get('intent') in ('topic', 'project', 'sources'):
+                track.update(brief=publication['summary'], assumptions=publication['assumptions'], objectives=[item['goal'] for item in cleaned],
+                             status='active', revision=track['revision'] + 1, updated_at=now)
+                self._put(db, 'track', track, True)
+            return {'outline': cleaned}
+        if action == 'course_lesson':
+            key = text(p.get('lesson_key'), 'lesson_key', 80, True)
+            item = next((item for item in course['outline'] if item['key'] == key), None)
+            if item is None or key != job['lesson_key']:
+                fail('Lesson is outside the authorized generation request', 'job_scope', 403)
+            source_ids = strings(p.get('source_ids', []), 'source_ids', 30, 100)
+            if len(set(source_ids)) != len(source_ids):
+                fail('Source references must be unique')
+            for sid in source_ids:
+                source = self._get(db, 'source', sid, tid)
+                if channel == 'chat_relayed' and source['sharing'] == 'metadata-only':
+                    fail('Model cannot author from a metadata-only source', 'source_restricted', 403)
+                if not source['excerpt'].strip():
+                    fail('An unread reference cannot be cited as source material', 'source_unread', 409)
+            publication = {'key': key, 'title': item['title'], 'content': text(p.get('content'), 'lesson content', 50000, True),
+                           'source_ids': source_ids, 'visual': self._visual(p.get('visual'))}
+            digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
+            if job.get('lesson_hash'):
+                if job['lesson_hash'] != digest:
+                    fail('Lesson already published with different content', 'revision_conflict', 409)
+                return {'lesson': self._get(db, 'lesson', job['lesson_id'], tid)}
+            if job['status'] not in ('queued', 'generating'):
+                fail('Generation job has ended; explicitly generate again', 'job_closed', 409)
+            if any(lesson['key'] == key for lesson in self._all(db, 'lesson', tid)):
+                fail('Lesson is already published', 'revision_conflict', 409)
+            lesson = self._new(track_id=tid, **publication, version=1, job_id=job['id'], created_at=now)
+            self._put(db, 'lesson', lesson)
+            job.update(status='completed', lesson_hash=digest, lesson_id=lesson['id'], updated_at=now)
+            self._put(db, 'course_job', job, True)
+            if course['position']['lesson_key'] is None:
+                course['position']['lesson_key'] = key
+                self._put(db, 'course', course, True)
+            return {'lesson': lesson}
+        fail('Unknown course action')
+
+    def _course_new_job(self, db, track, context_id, request_id, lesson_key, now):
+        course = self._course_data(db, track['id'])
+        outline = course['outline'] if course else []
+        job = self._new(track_id=track['id'], context_id=context_id, request_id=request_id,
+                        requested_lesson_key=lesson_key, lesson_key=lesson_key or (outline[0]['key'] if outline else None),
+                        allow_outline=lesson_key is None and not outline, status='queued', error='', created_at=now, updated_at=now)
+        self._put(db, 'course_job', job)
+        return job
+
     def dispatch(self, action, params, *, channel='ui_direct'):
         if not isinstance(action, str) or action not in READS | WRITES or not isinstance(params, dict):
             fail('Unknown action or invalid parameters')
@@ -492,6 +746,8 @@ class Store:
                 raise
 
     def _dispatch(self, db, action, p, channel):
+        if action.startswith('course_'):
+            return self._course_dispatch(db, action, p, channel)
         now = iso(self.clock())
         if action in ('state', 'export'):
             result = {'api_version': 1, 'schema_version': 1, 'store_id': self.store_id, 'compatible_client_versions': [1], 'capabilities': CAPABILITIES, **self._snapshot(db, channel)}

@@ -82,6 +82,22 @@ SPECS['quote_check'] = ({'source_id': ID, 'quote': string(12000)}, ['source_id',
 SPECS['activity_revision'] = ({**SPECS['activity'][0], 'activity_id': ID}, [*SPECS['activity'][1], 'activity_id'])
 
 
+MATERIAL = object_schema({'title': string(300), 'kind': string(100), 'url': string(2000, 0), 'locator': string(2000, 0), 'excerpt': string(50000, 0), 'sharing': enum('metadata-only', 'selected-excerpts', 'full-text')}, ['title', 'kind', 'sharing'])
+LESSON_OUTLINE = object_schema({'key': string(80), 'title': string(300), 'goal': string(2000)}, ['key', 'title', 'goal'])
+SPECS.update({
+    'course_source': ({**CONTEXT, 'job_id': ID, 'source_id': ID, 'status': enum('read', 'failed', 'unsupported'), 'excerpt': string(50000, 0), 'error': string(2000, 0)}, ['context_id', 'job_id', 'source_id', 'status']),
+    'course_start': ({'request_id': ID, 'title': string(300), 'interest': string(12000), 'intent': enum('topic', 'project', 'sources'), 'level': enum('beginner', 'intermediate', 'advanced'), 'materials': array(MATERIAL, 20)}, ['request_id', 'title', 'intent', 'level', 'materials']),
+    'course_open': ({'track_id': ID}, ['track_id']),
+    'course_read': ({'track_id': ID}, ['track_id']),
+    'course_generate': ({**CONTEXT, 'request_id': ID, 'lesson_key': string(80)}, ['context_id', 'request_id']),
+    'course_bind': ({**CONTEXT, 'session_id': string(200), 'scope': string(2000)}, ['context_id', 'session_id', 'scope']),
+    'course_position': ({**CONTEXT, 'lesson_key': string(80), 'completed': array(string(80), 50)}, ['context_id', 'lesson_key']),
+    'course_plan': ({**CONTEXT, 'job_id': ID, 'summary': string(12000), 'assumptions': array(string(1000), 30), 'lessons': array(LESSON_OUTLINE, 50)}, ['context_id', 'job_id', 'summary', 'assumptions', 'lessons']),
+    'course_lesson': ({**CONTEXT, 'job_id': ID, 'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL}, ['context_id', 'job_id', 'lesson_key', 'content', 'source_ids']),
+    'course_job_status': ({**CONTEXT, 'job_id': ID, 'status': enum('stopped', 'failed'), 'error': string(2000, 0)}, ['context_id', 'job_id', 'status']),
+})
+
+
 def parameters(name):
     properties, required = SPECS[name]
     return {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}
@@ -133,7 +149,7 @@ def action(name, params, *, channel='ui_direct', api_version=1):
         raise LearningError('Unsupported adapter channel')
     if not isinstance(name, str) or name not in SPECS:
         raise LearningError('Unknown learning action')
-    if channel == 'chat_relayed' and name in ('start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
+    if channel == 'chat_relayed' and name in ('course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
         raise LearningError('This action requires the human workspace or explicit slash command')
     _validate(params, parameters(name))
     try:

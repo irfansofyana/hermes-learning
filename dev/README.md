@@ -1,79 +1,57 @@
 # Development guide
 
-Use Node.js 22+ and Python 3.11+. The plugin backend uses Hermes’s FastAPI/Pydantic runtime.
+Use Node.js 22+ and Python 3.11+. The backend uses Hermes's FastAPI/Pydantic runtime. Work against disposable stores and isolated Hermes homes; local preview and verification do not require installing into or restarting a daily profile.
 
 ## Local preview
 
-This preview serves the shared UI against the actual learning store, using a Python standard-library HTTP adapter. It does not load Hermes, install the plugin, restart the daily instance, or prove compatibility with the real dashboard, Electron client, or messaging channels.
-
-From the repository root, build the shared UI and run:
+The preview serves the shared UI against the real Learning store through a Python standard-library HTTP adapter. Its tutor transport is deliberately simulated and visibly labelled. Generate creates synthetic outline/lesson content through the real course actions; chat replies are deterministic. No model call, repository fetch, or real Hermes session occurs.
 
 ```sh
-cd ui
-npm install
-npm run build
-cd ..
+npm --prefix ui install
+npm --prefix ui run build
 python3 -B dev/serve.py --port 8877 --data-dir /tmp/hermes-learning-preview
 ```
 
-Open <http://127.0.0.1:8877/>. The workspace starts empty. Use its explicit creation and authoring actions to add learning records. No demo content is automatically inserted.
+Open [the local preview](http://127.0.0.1:8877/), enter a topic, and choose **Generate learning path**. A fresh store starts empty; loading the page does not insert examples. Production Desktop and dashboard entrypoints never import the simulated tutor transport.
 
-Omit `--data-dir` to create a new temporary directory on each launch. The directory is printed at startup and retained after shutdown, so it can be reopened with `--data-dir`. Explicit data directories must be outside the repository and `~/.hermes`. Preview data uses `learning.sqlite3` and never uses Hermes profile-path discovery. Stop the server with Ctrl+C.
+Omit `--data-dir` for a fresh temporary directory on each launch. The server prints the directory and retains it after shutdown, so it can be reopened later with `--data-dir`. Explicit directories must be outside this repository and `~/.hermes`; preview storage never uses Hermes profile-path discovery. Stop with Ctrl+C.
 
-The server binds only to `127.0.0.1`. Visiting the home page establishes an HttpOnly, SameSite=Strict cookie. API reads require that cookie; writes also require an exact same-origin `Origin` header, JSON content type, and the versioned action envelope. Host validation and fetch-site checks reject cross-site requests. No CORS access is enabled. Restarting the server rotates its session token; reload the home page afterward.
+The server binds only to `127.0.0.1`. Visiting its home page establishes an HttpOnly, SameSite=Strict cookie. API reads require that cookie; writes also require an exact same-origin `Origin` header, JSON content type, and a versioned action envelope. Host/fetch-site validation rejects cross-site requests, and CORS is not enabled. Restart rotates the session token; reload the home page afterward.
 
-API base: `/api/plugins/hermes-learning`. Supported reads are `/state`, `/track/{id}`, `/activity/{id}?context_id=...`, `/source/{id}`, and `/export`. Writes use `POST /action` with `{ "action": "...", "params": {}, "api_version": 1 }`. The adapter restricts actions to the explicit UI workflow and dispatches them as `ui_direct`.
+The API base is `/api/plugins/hermes-learning`. Reads include `/state`, `/track/{id}`, `/activity/{id}?context_id=...`, `/source/{id}`, and `/export`. Actions use `POST /action` with `{ "api_version": 1, "action": "...", "params": {} }`. Course reads also use the `course_read` action. The preview allowlist includes course publication actions so the simulated transport can exercise persistence; this is not evidence of model authorization in a real host.
 
-Run focused HTTP verification:
+## Browser checks
 
-```sh
-python3 -B -W error::ResourceWarning -m unittest discover -s tests -p test_preview.py -v
-```
+`dev/check-integrated.mjs` exercises the current primary interface: multiple files and an unsupported PDF, an unread link, first-lesson generation, inline chat, next-lesson generation, read markers, reload/Continue with history, tutor visibility, and mobile dark-mode draft preservation. It checks console/page errors and horizontal overflow and captures screenshots outside the repository.
 
-These tests bind ephemeral loopback ports. A sandbox that prohibits socket creation must allow loopback execution for this command. Tests cover session authentication, origin/Host checks, the action envelope, read routing, and static path restrictions; they use a fake dispatcher to isolate the HTTP boundary. Store and real host integration have separate tests and verification requirements.
-
-## Repository installation check
-
-The repository root is the installable package. `npm --prefix ui run build` writes the committed host bundles to `dashboard/dist/index.js` and `desktop/plugin.js`; `dev/package.py` and the isolated host runner use an explicit release-file list from that root.
-
-With an existing Hermes checkout, run its actual Desktop installer discovery against this checkout:
+Start an isolated preview first. The check creates a new path in its store, so use disposable test data. Bring an existing Playwright installation; none is bundled with the plugin.
 
 ```sh
-node dev/check-install.mjs /path/to/hermes-agent
-```
-
-Append `https://github.com/irfansofyana/hermes-learning` to also clone and probe the published repository, then install its desktop component into a temporary directory. This checks that the remote bundle matches the local build. All temporary files are removed afterward; no daily Hermes profile or desktop installation is touched. Run this after publishing layout or bundle changes.
-
-## Learning-loop checks
-
-Run `python3 -B dev/evaluate.py` for deterministic tool/record scenarios. Live-model cases and their limits are documented in [the evaluation guide](../docs/evaluations/tutoring.md).
-
-`dev/check-workspace.mjs` exercises the built workspace in a browser, including linked example activities, hint/answer/feedback, objective progress, source import, draft recovery and isolation across activity switches, visuals, and mobile dark layout. Start a preview with a **fresh empty data directory** first: this check explicitly creates synthetic learning records and refuses a store containing tracks. It needs an existing Playwright installation; none is bundled with the plugin.
-
-```sh
-LEARNING_PREVIEW_URL=http://127.0.0.1:8882 \
+LEARNING_PREVIEW_URL=http://127.0.0.1:8877 \
 PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs \
 CHROME_PATH=/path/to/google-chrome \
-node dev/check-workspace.mjs
+node dev/check-integrated.mjs
 ```
 
-Omit `PLAYWRIGHT_MODULE` to resolve `playwright` normally and `CHROME_PATH` to use Playwright's installed Chromium. Screenshots go to `/tmp/hermes-learning-ui-check`, overridable with `LEARNING_SCREENSHOT_DIR`. Restricted containers may require loopback/browser permission; `LEARNING_BROWSER_NO_SANDBOX=1` is an explicit opt-in for disposable test containers that cannot use Chromium's sandbox.
+Omit `PLAYWRIGHT_MODULE` to resolve `playwright` normally and `CHROME_PATH` to use Playwright's installed Chromium. Screenshots default to `/tmp/hermes-learning-integrated-check`; override with `LEARNING_SCREENSHOT_DIR`. Restricted environments may need loopback/browser permission. `LEARNING_BROWSER_NO_SANDBOX=1` is an explicit opt-in for disposable containers that cannot use Chromium's sandbox.
 
-## Host bundles and isolated setup
+`dev/check-workspace.mjs` is the earlier legacy activity/evidence check. It was written for the former default entry screen and is not the current integrated-preview smoke test. Its activity, hint, feedback, progress, source, and visual scenarios remain useful when testing the secondary Learning records interface; its navigation must be adapted to enter that view first. It also expects a fresh empty store.
 
-Build output:
+## Host bundles
 
 | Surface | Artifact | Runtime |
 | --- | --- | --- |
-| Backend + web | Root Python modules and `dashboard/` | Hermes backend plugin manager and dashboard |
-| Desktop | `desktop/plugin.js` | Hermes native disk-plugin loader and `@hermes/plugin-sdk` |
-| Development preview | `ui/dist/` | Local isolated preview server |
+| Backend + dashboard | Root Python modules and `dashboard/dist/index.js` | Hermes backend plugin manager and dashboard SDK |
+| Desktop | `desktop/plugin.js` | Native disk-plugin loader and `@hermes/plugin-sdk` |
+| Development preview | `ui/dist/` | Isolated local server and explicitly simulated tutor |
 
-The web bundle uses the host's `__HERMES_PLUGIN_SDK__.React` and authenticated `fetchJSON`. Desktop imports the host's React and SDK and uses `ctx.rest`. Neither ships a second React runtime into Hermes. Both are built from `ui/src/`; do not edit generated bundles by hand.
+Build from `ui/src/` with `npm --prefix ui run build`; do not edit generated bundles by hand. The two host bundles are committed at the repository root's public package locations.
 
-## Check the real host in isolation
+Both host bundles use the host's React runtime. The dashboard uses authenticated `fetchJSON` for Learning actions and `buildWsUrl('/api/ws')` for the tutor gateway. Desktop uses `ctx.rest` for Learning actions and public host requests/events for the tutor. Shared session logic is in `tutor-session.mjs`, adapters in `tutor-transport.mjs`, and React binding in `useTutor.jsx`.
 
-Use an existing Hermes checkout and its Python environment. These commands stage a copy into a fresh owned directory, not your daily Hermes profile:
+## Isolated host checks
+
+Use an existing Hermes checkout and its Python environment:
 
 ```sh
 /path/to/hermes-agent/.venv/bin/python -B dev/hermes.py prepare --source /path/to/hermes-agent --home /tmp/hermes-learning-host
@@ -81,14 +59,25 @@ Use an existing Hermes checkout and its Python environment. These commands stage
 /path/to/hermes-agent/.venv/bin/python -B dev/hermes.py serve --source /path/to/hermes-agent --home /tmp/hermes-learning-host --port 8878
 ```
 
-The dashboard tab is `/learning`; the plugin ID is `hermes-learning`. The command is `/learning-track`, because `/learning` is already a built-in command in the tested host. Remote desktop needs both the installed frontend and the compatible plugin on its connected backend/profile. Backend installation alone is not proof that a remote desktop frontend is installed.
+These commands stage a copy in a fresh owned home. The dashboard tab is `/learning`, the plugin ID is `hermes-learning`, and the legacy tracked-chat command is `/learning-track`. The integrated workspace requires no copied command or main-chat handoff.
 
-For native disk distribution, the loader expects `<local HERMES_HOME>/desktop-plugins/hermes-learning/plugin.js`. The tested unified plugin installer also discovers a package's `desktop/plugin.js` and copies it into the local desktop-plugin directory. Enablement is exposed under **Capabilities → Plugins → Desktop** in the tested desktop build. Follow your host's plugin installation workflow; no daily installation or restart was performed by this change.
+A remote Desktop frontend needs both its local frontend installation and the compatible agent component on the connected backend/profile. Backend installation alone does not install the native frontend. The native loader expects `<local HERMES_HOME>/desktop-plugins/hermes-learning/plugin.js`; the tested unified installer discovers `desktop/plugin.js` and copies it there. Enablement is under **Capabilities → Plugins → Desktop** in the tested host.
 
+Real gateway/model verification must exercise session creation, publication through Learning tools, inline replies, restoration, and interruption against an isolated host. Source inspection, simulated responses, and a production build cannot establish those runtime claims. Record exact tested surfaces and limitations in [compatibility](../docs/compatibility.md).
+
+## Repository installation check
+
+The repository root is the installable package. `dev/package.py` and the isolated runner use an explicit release-file list from that root.
+
+```sh
+node dev/check-install.mjs /path/to/hermes-agent
+```
+
+Append `https://github.com/irfansofyana/hermes-learning` to clone and probe the published repository and install its Desktop component into a temporary directory. This also checks whether the remote bundle matches the local build. Temporary files are removed afterward; the daily profile is untouched. Run it after publishing package-layout or bundle changes.
 
 ## Test suite
 
-Run the backend suite with the same Python environment that supplies Hermes's FastAPI dependencies. Preview HTTP tests need loopback socket permission.
+Use the Python environment that provides Hermes's FastAPI dependencies. HTTP tests bind ephemeral loopback ports and need socket permission.
 
 ```sh
 /path/to/hermes-agent/.venv/bin/python -B -W error::ResourceWarning -m unittest discover -s tests -v
@@ -99,4 +88,6 @@ python3 -B dev/evaluate.py
 node spikes/001-cross-client-learning/tests/check_recovery.cjs
 ```
 
-The service tests cover consent/revocation, cross-track references, source policy, version/key gating, retries, assistance, corrections, objective evidence, fixed-clock scheduling, concurrent startup, and backup restoration. The deterministic evaluation checks complete tool flows; it does not evaluate a model's teaching. See the [tutoring evaluation guide](../docs/evaluations/tutoring.md) and [compatibility](../docs/compatibility.md) for observed results and runtime boundaries.
+Backend tests cover course job authorization/idempotency, publication and source boundaries, legacy evidence, context revocation, concurrent startup, and restoration. UI unit tests cover input limits, inert Markdown rendering, host transport lifecycle, session identity/history, permission handling, interruption, and uncertain delivery without replay. Preview HTTP tests cover authentication, origin/Host checks, action envelopes, routes, and static path restrictions.
+
+`dev/evaluate.py` checks deterministic tool/record scenarios, not teaching quality. Live-model evaluation and its limits are documented in [the evaluation guide](../docs/evaluations/tutoring.md). Keep simulated UI checks, real-host integration, and model-quality evidence distinct when reporting results.

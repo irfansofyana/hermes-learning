@@ -1,0 +1,40 @@
+// Optional browser check against the explicitly simulated preview and a disposable store.
+import {mkdir} from 'node:fs/promises';
+import {resolve} from 'node:path';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const url=process.env.LEARNING_PREVIEW_URL||'http://127.0.0.1:8882';
+const output=resolve(process.env.LEARNING_SCREENSHOT_DIR||'/tmp/hermes-learning-integrated-check');
+await mkdir(output,{recursive:true});
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{}),headless:true,args:process.env.LEARNING_BROWSER_NO_SANDBOX==='1'?['--no-sandbox']:[]});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const errors=[];page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
+try{
+await page.goto(url);await page.getByRole('heading',{name:'What do you want to learn or build?'}).waitFor();
+await page.screenshot({path:resolve(output,'home-desktop.png')});
+const title='Build a job queue in Go — browser integration '+Date.now();
+await page.getByLabel('What do you want to learn or build?').fill(title);
+await page.getByLabel('Attach text, Markdown, or code files').setInputFiles([{name:'queue.go',mimeType:'text/plain',buffer:Buffer.from('package queue\n// Queue is FIFO')},{name:'notes.md',mimeType:'text/markdown',buffer:Buffer.from('# Retries\nA retry may duplicate work.')},{name:'unreadable.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF binary not supported')}]);
+await page.getByText('Choose a supported text, Markdown, or code file. PDF and image import are not available.').waitFor();
+await page.getByRole('button',{name:'Add link',exact:true}).click();await page.getByLabel('Source or repository link').fill('https://invalid.example/repository');await page.getByRole('button',{name:'Add material',exact:true}).click();
+await page.getByText('Link · not read',{exact:true}).waitFor();
+await page.getByRole('button',{name:'Generate learning path',exact:true}).click();
+await page.getByRole('heading',{name:'Understand the moving parts',exact:true}).waitFor({timeout:15000});
+await page.getByText('A queue holds tasks in the order they arrive.',{exact:false}).waitFor();
+await page.screenshot({path:resolve(output,'lesson-desktop.png')});
+assert.equal(await page.locator('.lw-source-list .has-error').count(),1);
+await page.getByRole('button',{name:'Explain simply',exact:true}).click();
+await page.getByText('This is the development preview. In Hermes, your configured model answers here using the selected lesson and sources.',{exact:true}).waitFor({timeout:15000});
+await page.getByRole('button',{name:'Next lesson',exact:true}).click();
+await page.getByRole('heading',{name:'Make one small change',exact:true}).waitFor({timeout:15000});
+await page.getByRole('button',{name:'Mark as read',exact:true}).click();await page.getByRole('button',{name:'Marked as read',exact:true}).waitFor();
+const before=await page.locator('.lw-message').count();assert.ok(before>=6);
+await page.reload();await page.getByRole('heading',{name:'What do you want to learn or build?'}).waitFor();
+await page.locator('.lw-path').filter({hasText:title}).click();await page.getByRole('heading',{name:'Make one small change',exact:true}).waitFor({timeout:15000});assert.ok(await page.locator('.lw-message').count()>=before);
+await page.getByRole('button',{name:'Hide tutor',exact:true}).click();await page.getByRole('button',{name:'Open tutor',exact:true}).click();assert.ok(await page.locator('.lw-message').count()>=before);
+await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'dark'});await page.getByRole('button',{name:'Lesson',exact:true}).click();await page.screenshot({path:resolve(output,'lesson-mobile-dark.png')});
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+await page.getByRole('button',{name:'Tutor',exact:true}).click();await page.getByLabel('Message your tutor').fill('Keep this draft');await page.getByRole('button',{name:'Path',exact:true}).click();await page.getByRole('button',{name:'Tutor',exact:true}).click();assert.equal(await page.getByLabel('Message your tutor').inputValue(),'Keep this draft');
+await page.screenshot({path:resolve(output,'tutor-mobile-dark.png')});
+assert.deepEqual(errors,[]);console.log(JSON.stringify({status:'passed',messages:before,errors,screenshots:output}));
+}catch(error){await page.screenshot({path:resolve(output,'failure.png')});console.log(await page.locator('body').innerText());console.log(errors);throw error;}finally{await browser.close();}

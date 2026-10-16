@@ -2,17 +2,17 @@
 
 # Hermes Learning
 
-A personal learning workspace for [Hermes Agent](https://github.com/NousResearch/hermes-agent). Study a topic, practise what you learn, and return to your saved work across desktop, web, and chat.
+A personal learning workspace for [Hermes Agent](https://github.com/NousResearch/hermes-agent). Turn a topic, project, or your own material into lessons, ask a tutor inside the workspace, and continue from saved work.
 
 ## What you can do
 
-- **Plan your study.** Start with a question, a goal, or a source. Review the proposed learning path before approving it.
-- **Learn from your own material.** Add text, Markdown, or code excerpts, and choose what the tutor can read.
-- **Practise with feedback.** Work through explanations, predictions, code traces, and build exercises. Save answers, hints, and assessments together.
-- **Explore diagrams.** Step through sequences, state machines, and code traces alongside the lesson.
-- **Pick up where you left off.** Review progress, revisit scheduled objectives, and resume a track in chat.
+- **Start learning immediately.** Enter what you want to learn or build, optionally choose a level, and generate an outline and a complete first lesson.
+- **Bring your own material.** Attach multiple text, Markdown, or code files, paste notes, or add source and repository links. Each source shows whether its text is available or retrieval failed.
+- **Read and ask in one place.** Follow the lesson outline, explore diagrams, ask for a simpler explanation or another example, and chat with the tutor beside the lesson.
+- **Continue later.** Reopen your last lesson and its tutor conversation. Generate later lessons when you select them.
+- **Keep your existing records.** Saved activities, answers, assessments, reviews, and detailed progress remain available under Learning records.
 
-Tracking starts when you choose to start or resume a learning track. Ordinary educational chat stays ad hoc. Saving an answer leaves it awaiting assessment; it does not automatically call a model or assign a grade.
+The tutor uses your configured Hermes model and credentials. Generating a path saves your request and supplied material and sends shared material to that model. Opening Learning alone does not start a model turn. Reading progress is separate from assessed practice; an ordinary tutor question is not a graded attempt.
 
 ## Install
 
@@ -30,11 +30,13 @@ For a remote backend, install there too, then restart its dashboard/API server:
 hermes plugins install https://github.com/irfansofyana/hermes-learning --enable
 ```
 
-Open Learning to start a track, or use `/learning-track` in chat. Desktop and web share saved work when connected to the same backend and profile.
+Open Learning and enter a topic or project. Desktop and web use the same saved work when connected to the same backend and profile. `/learning-track` remains available for explicitly tracked study in chat.
 
 ## Status
 
-This is an early, personal-use plugin tested with Hermes v0.22.2. Progress reflects saved practice and feedback; it is not a calibrated mastery score. See [compatibility and known limits](docs/compatibility.md) for tested behavior and remaining work.
+This is an early, personal-use plugin. File import supports UTF-8 text, Markdown, and code; PDF and image import are not available. Links remain unread until retrieval succeeds. Source citations do not independently verify a claim, and reading progress is not a mastery score.
+
+See [compatibility and known limits](docs/compatibility.md) for verified host behavior and remaining work. The local development preview labels its simulated tutor output explicitly.
 
 ## More
 

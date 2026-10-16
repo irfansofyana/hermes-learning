@@ -1,62 +1,83 @@
-# Architecture proposal
+# Architecture
 
-Status: design baseline with the implemented learning-loop contract below. [Requirements](requirements.md) remain the broader product roadmap; runtime verification is recorded in [compatibility](compatibility.md).
+The primary interface generates lessons and runs a tutor inside Learning. The service retains the existing activity/evidence system and adds course records without reinterpreting historical answers. [Compatibility](compatibility.md) records runtime verification; [the integrated design](superpowers/specs/2026-10-16-integrated-learning-design.md) describes the intended experience and constraints.
 
 ```text
-Desktop plugin -------- HTTP API ----+
-Web-dashboard plugin -- HTTP API ----+--> Learning service --> SQLite + artifacts
-Hermes agent tools -----------------+
-Teaching skills + Humanizer guide agent behavior
+Desktop UI -- host.request / host.onEvent --+
+Web UI ----- authenticated gateway WS -----+--> Hermes sessions and configured model
+                                          |             |
+Shared React learning workspace           |       Learning model tools
+             |                            |             |
+             +----- versioned HTTP API ---+-------------+--> Learning service --> SQLite
 ```
 
-## Ownership
+## Ownership and boundaries
 
-The learning service validates explicit tracking-context authorization, authoring, evidence, assistance events, review policy, source disclosure, and durable changes. Default ad hoc chats do not trigger plugin learning-record writes or automatic personal-track lookup. Merely loading a skill or opening an overview is not enrollment. HTTP and tools are adapters over this service. Skills guide teaching but do not bypass validation. Resolve the profile data path per operation, not at import time. Do not modify Hermes conversation tables.
+Hermes owns conversation history, model credentials, agent execution, and tool permissions. Learning owns paths, lessons, supplied sources, generation jobs, reading position, and practice evidence. The plugin uses public session operations; it does not write to Hermes conversation tables or introduce a separate model provider.
 
-Activities have immutable assessed versions and pre-attempt criteria. Agent-authored and learner-authored content are attributable. UI answers commit as awaiting assessment without a live chat. Self-assessment and agent review are separate records. Backend model inference is deferred pending a host-inference probe; the UI must explain chat handoffs.
+**Generate learning path** authorizes creation of the requested path, its material, and bounded model work. **Continue** establishes or recovers the path's learning context and restores its conversation without submitting a prompt. Ordinary mounting reads saved state. Neither learning vocabulary in an unrelated chat nor loading a teaching skill authorizes plugin persistence.
 
-## Implemented learning loop
+Repository material is read-only teaching input. Imported code and model-generated Markdown never execute in the workspace. Source text is untrusted material, not instructions. Skills guide teaching; service validation independently enforces authorization and disclosure.
 
-The additive API/schema-1 contract exposes capability flags for objective evidence, generated help and structured visuals. Old stores and legacy activities remain readable. New activity versions snapshot their objective IDs/titles, purpose and conceptual/practical competency; changing a track objective title gives it a new identity without rewriting earlier evidence.
+## Records and actions
 
-Read-only projections join attempts, assistance, active assessments and disputes to produce objective progress and one next action per track. Pending assessment and disputes take precedence over more practice. Conceptual and practical summaries remain separate; successful work in one dimension does not erase weaker evidence in the other. The latest feedback record is labeled separately from the summary's basis. No progress percentage is presented as mastery.
+The API remains version 1. Additive records live beside existing tracks, activities, runs, attempts, assistance, assessments, and reviews:
 
-Generated help stores the exact text with author/channel attribution and an idempotent request ID. Attempt assistance follows activity revisions, and nested help and feedback obey source disclosure policy. Assessments can record complete criterion results and uncertainty. Objective-linked reviews use policy v2; legacy unlinked activities retain policy v1. Both use transparent 1/3/7-day intervals. Review suggestions prefer another available unattempted activity on the objective.
+| Record | Responsibility |
+| --- | --- |
+| Track | Original goal, topic/project/source intent, level, and saved direction |
+| Course | Ordered outline, assumptions, selected lesson, read markers, and tutor binding |
+| Lesson | Published Markdown, source references, optional bounded visual, and originating job |
+| Generation job | Authorized path, context, target lesson, request identity, status, and publication result |
+| Course request | Idempotency identity for atomic initial path creation |
 
-The shared UI imports selected UTF-8 text/Markdown/code into an editable source form before attachment. Sequence, state-machine and code-trace components render bounded data, with hidden future steps enforced by the service. Neither imported nor visualized code executes. Desktop chat preparation uses the host composer API; the explicit resume command and tutor request are separate messages. A copyable fallback remains available.
+All HTTP actions use `POST /action` with `{ "api_version": 1, "action": "...", "params": {} }`.
 
-See the [contract and validation scope](superpowers/specs/2026-10-16-learning-loop.md) and [evaluation guide](evaluations/tutoring.md). Deterministic evaluations establish record behavior; a limited live-model evaluation is reported separately.
+| Action | Caller and effect |
+| --- | --- |
+| `course_start` | UI: atomically save the goal and materials, establish context, and create the initial job; repeated identical request IDs return the same result |
+| `course_open` | UI: explicitly continue a track; recover an unfinished job's authorizing context when needed |
+| `course_read` | Read the track, outline, lessons, position, sources, and jobs; UI may also read the tutor binding; no context capability is returned |
+| `course_generate` | UI: authorize initial generation or one selected outline lesson; an explicit new request can supersede unfinished work for that target |
+| `course_bind` | UI: save a durable Hermes session ID with its store scope |
+| `course_position` | UI: select a published lesson and optionally record which published lessons were read |
+| `course_job_status` | UI: record stopped or failed work; successful publication completes its job |
+| `course_plan` | Model publication: save an ordered outline and assumptions for an authorized initial job |
+| `course_lesson` | Model publication: save only the job's authorized lesson with validated content, references, and visual |
+| `course_source` | Model publication: record retrieved text or a retrieval failure for an explicitly supplied URL within the active job |
 
-Candidate entities: Exploration/LearningBrief, SourceRecommendation, Track, Objective, Source, SourceLocator, ActivityVersion, ActivityRun, AssistanceEvent, Attempt, Assessment, ReviewItem, Visualization, Artifact. An exploration can exist after explicit persistence opt-in but before any approved track; it stores learner-stated interests, assumptions, unresolved choices, candidate directions/materials, and approval status. Accepted recommendations are not automatically downloaded or authorized for model sharing. Misconception/open-question notes attach to objectives. Durable session references are optional provenance, not the resume mechanism.
+Model publication tools use the `learning_` prefix. They cannot create arbitrary generation work, resume unrelated tracks, or expand a job's target. Publication is transactional and idempotent; a changed payload conflicts with an existing publication. Source IDs must belong to the path, and unread links cannot be cited as source text. Saved outlines and lessons currently remain immutable.
 
-## Storage and consistency
+## Tutor lifecycle
 
-One server-local SQLite store plus artifacts. Demonstrate WAL/busy timeout and transactionally guarded migrations across host processes. Append attempts, assistance, and superseding assessments. Use targeted revisions on edits/corrections. Server-issued run/submission IDs make retries safe: same payload returns prior result, changed payload conflicts, explicit new attempt permits identical text. Provide lookup after uncertain delivery.
+`LearningApp.jsx` orchestrates explicit course actions. `useTutor.jsx` wraps the shared `TutorSession` controller; `tutor-transport.mjs` supplies the Desktop and dashboard adapters. Desktop uses public `host.request` and `host.onEvent`. The dashboard obtains an authenticated WebSocket URL through `SDK.buildWsUrl('/api/ws')`.
 
-Store identity and API/schema compatibility are explicit. Refuse invalid storage paths and incompatible writes. Cache by store/profile and reset on connection changes. Local drafts are private, unsubmitted, and clearly labeled; they are not authoritative progress. Poll visible views within an initial 30-second target, refresh on focus/reconnect, and invalidate immediately after a local write. No WebSocket or distributed queue is required initially.
+The controller creates or resumes one conversation per path, binds its durable session ID, then submits a prompt containing the current course context and source metadata. It does not copy every source excerpt into each message. The tutor reads permitted text through Learning tools.
 
-## Learning and visual flow
+Runtime session IDs can change after resume or compression. The controller uses the current runtime ID for gateway requests and events while retaining the durable ID for later restoration. Bindings are scoped to the authoritative Learning store identity; the selected host profile is also carried in host operations. Backend/profile changes reset the UI and controller so a draft or late event cannot attach to another path.
 
-Explicit tracked entry/resume binds a store/profile and exploration/track to a conversation or workspace context, then fetches a server-derived resume brief, including an unfinished exploration when no track exists. Agent skills handle one-question-at-a-time discovery and source recommendation using host research tools; no new backend search or inference service is assumed. UIs show exploration/proposal/active states and hand off to chat when agent authoring is needed. Reference verification and access status are stored separately from learner approval. Discovery answers are not graded attempts. Check direction after the first activity before expanding the path. Source retrieval enforces model-sharing restrictions and returns labeled untrusted content. Attempts preserve capture channel and known/unknown assistance. Record hints/reveals before claiming they are saved. Gate solutions at tool/API boundaries while acknowledging the authoring agent may know them already.
+Streaming events update the transcript and refresh published course data. History restoration reconciles saved messages with the host's current state. Permission and clarification requests appear inside the tutor and require an explicit response. Stop interrupts the current runtime and records stopped generation where applicable.
 
-Store visual data only as a bounded versioned schema. Fixed SVG/HTML components render escaped labels, step controls, source links, and a deterministic step-list alternative. Model-provided executable markup is disallowed. Schema validity does not imply semantic correctness. Original source figures are inert artifacts with provenance and distinct ingestion requirements.
+A lost acknowledgement is not automatically replayed. The UI exposes reconnect so the controller can reconcile the saved session before another prompt. Partial outlines and lessons remain saved; retrying generation is a separate user action. A missing provider, disconnected gateway, or failed publication leaves a visible error rather than a fallback answer.
 
-## Teaching quality
+## Sources and rendering
 
-Bundle Humanizer with teaching-specific guidance so clean installs do not rely on the developer profile. Verify skill provenance/license before redistribution and actual host activation before release. Use author-side editorial guidance for natural, specific teaching, with source/technical fidelity taking priority. Return final prose only. Do not introduce a second mandatory model inference service or rewrite structured tool payloads. Humanizer does not enroll the conversation or create records. See [Teaching quality](teaching-quality.md) and R11.
+Import accepts supported UTF-8 text, Markdown, and code. Per-source limits are 50,000 characters and 200 KB; a path accepts at most 20 materials with aggregate excerpt limits of 100,000 characters and 200,000 UTF-8 bytes. The UI also bounds serialized material before submission. Failed files remain individually visible and removable.
 
-## Ad hoc/tracked boundary
+Supplied text is marked `provided`; links begin `unread`. Retrieval can record `read`, `failed`, or `unsupported` with failure details. Retrieval success is agent-reported, not independent verification. Sharing policies remain `metadata-only`, `selected-excerpts`, and `full-text`; metadata-only text is withheld from model reads and cannot support model-authored lesson content.
 
-Ordinary chat can explain, explore, and visualize without invoking persistence. Tracking is scoped, visible, and revocable rather than inferred from learning vocabulary. Promotion previews selected earlier context, requires import approval, and creates no retrospective assessment. Track-path approval and source-sharing permissions remain separate.
+The UI renders Markdown as escaped React elements. Raw HTML, scripts, source code, and arbitrary visual markup are not interpreted. Sequence, state-machine, and code-trace visuals use the existing bounded schemas and fixed components, with source disclosure and hidden-step gates enforced by the service.
 
-Workspace has Start tracked learning/Resume/Leave actions; messaging announces entry/exit. Ad hoc side questions do not become attempts or revise objectives. Leaving or an explicit untracked exchange stops recording in that context until an explicit resume. Validate active context on writes and reject stale/late mutations after exit. Identify an actual host-authorized entry mechanism in the spike; a model-generated flag is not sufficient. Other chat contexts do not inherit consent automatically.
+## Practice evidence and storage
 
-Do not persist ad hoc content into plugin records, including diagnostics disguised as learning state. Host conversation retention remains separate. Local unsubmitted drafts, source retrieval policies, and server-confirmed saving still apply within opted-in workflows.
+Marking a lesson read is distinct from mastery. A tutor question does not become an attempt. Existing practice captures immutable activity versions and criteria, exact answers, known assistance, author/channel attribution, and separate self or agent assessments. Corrections supersede earlier assessments without erasing evidence; disputes remain attributable.
 
-## Integration and trust
+Objective progress joins attempts, assistance, assessments, and disputes. Conceptual and practical evidence remain separate. Pending assessment and disputes take precedence in the legacy next-action projection. Objective-linked reviews retain policy v2 and legacy activities policy v1, with transparent 1/3/7-day scheduling.
 
-Backend plugin, dashboard adapter, desktop adapter, and skills share contracts but have different SDK/delivery requirements. Remote backend installation is not frontend distribution. Prove authenticated routes, actual messaging registration, remote desktop access, and cross-process store ownership. Hooks/raw-user-message capture and native deep links remain unverified.
+The server-local SQLite store uses guarded initialization, transactional writes, WAL/busy handling, and explicit store identity. Store paths resolve for the active profile per operation. Context validation rejects cross-track, revoked, and stale writes. Source disclosure applies to nested lesson, activity, help, and feedback content. Local drafts are unsubmitted UI state, not authoritative evidence.
 
-Use host authentication only after enforcement is tested. Validate mutations independently of model assurances; destructive operations/overrides require explicit target-bound confirmation. Protect source sharing, safe paths, draft retention, and artifact references. Do not execute imported code. Prompt-injection tests are regression checks, not immunity proofs.
+## Distribution and verification
 
-Test backup/restore of database plus artifacts, interruption, duplicates, migrations, malformed visuals, profile/store changes, and plugin unload/reload. Publish only runtime-tested compatibility claims. No installation or restart is authorized by this document.
+The repository root is the installable package. Shared React sources build committed Desktop and dashboard bundles. Remote backend installation and local Desktop frontend installation are distinct requirements.
+
+The development preview uses the real Learning service with an explicitly simulated tutor transport. It verifies UI and persistence flows without model calls, link retrieval, or daily-profile changes. Production bundles use host transports only. Unit tests, preview browser checks, and isolated real-host tests establish different boundaries; passing one does not establish the others. See [development](../dev/README.md) and [compatibility](compatibility.md).

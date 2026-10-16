@@ -17,7 +17,10 @@ API = '/api/plugins/hermes-learning'
 ACTIONS = frozenset(('start', 'resume', 'leave', 'brief', 'approve', 'track_status',
                      'source', 'activity', 'run', 'help', 'submit', 'assess',
                      'dispute', 'review', 'resume_brief', 'recommendation',
-                     'recommendation_decide', 'quote_check', 'activity_revision'))
+                     'recommendation_decide', 'quote_check', 'activity_revision',
+                     'course_start', 'course_open', 'course_read', 'course_generate',
+                     'course_bind', 'course_position', 'course_plan', 'course_lesson',
+                     'course_job_status', 'course_source'))
 MAX_BODY = 1024 * 1024
 
 
