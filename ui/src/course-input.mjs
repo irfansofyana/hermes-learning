@@ -1,4 +1,4 @@
-import {readSourceFile,SOURCE_MAX_CHARS} from './learning.mjs';
+import {readSourceFile} from './learning.mjs';
 export const COURSE_MAX_CHARS=100000;
 export const COURSE_MAX_BYTES=200000;
 export const COURSE_MAX_SOURCES=20;
@@ -15,13 +15,6 @@ export function linkMaterial(value){
  if(url.href.length>2000)throw new Error('This link is too long. Use a source URL under 2,000 characters.');
  if(url.username||url.password)throw new Error('Remove credentials from the source link.');
  return {title:(url.hostname+url.pathname).slice(0,300),url:url.href,locator:url.href,excerpt:'',kind:'website',sharing:'selected-excerpts',read_status:'unread'};
-}
-export function pastedMaterial(value,title='Pasted notes'){
- if(!value.trim())throw new Error('Paste some text before adding it.');
- if(value.length>SOURCE_MAX_CHARS)throw new Error('Pasted material exceeds 50,000 characters. Add a smaller excerpt.');
- if(bytes(value)>200*1024)throw new Error('Pasted material exceeds 200 KB. Add a smaller excerpt.');
- if(value.includes('\0'))throw new Error('Pasted material contains binary data. Choose plain text.');
- return {title:title.trim()||'Pasted notes',locator:'Pasted material',excerpt:value,kind:'notes',sharing:'selected-excerpts',read_status:'provided'};
 }
 export function prepareCourse({prompt='',level='beginner',items=[]}){
  const text=prompt.trim(),materials=items.filter(item=>item.material).map(({material})=>{const {read_status,retrieval_error,...source}=material;return source;});

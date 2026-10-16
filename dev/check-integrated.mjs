@@ -13,6 +13,7 @@ try{
 await page.addInitScript(()=>{localStorage.setItem('hermes-learning:draft:v1:old:track:activity','old answer');sessionStorage.setItem('hermes-learning:context','old context');sessionStorage.setItem('hermes-learning:tutor-request','old handoff');localStorage.setItem('learning-qa:keep','unrelated state');});
 await page.goto(url);await page.getByRole('heading',{name:'What do you want to learn or build?'}).waitFor();
 assert.deepEqual(await page.evaluate(()=>[localStorage.getItem('hermes-learning:draft:v1:old:track:activity'),sessionStorage.getItem('hermes-learning:context'),sessionStorage.getItem('hermes-learning:tutor-request'),localStorage.getItem('learning-qa:keep')]),[null,null,null,'unrelated state']);
+assert.equal(await page.getByRole('button',{name:'Paste text',exact:true}).count(),0,'Pasted-source entry is retired');
 assert.equal(await page.getByRole('button',{name:/learning records/i}).count(),0,'The retired records app must not be reachable');
 await page.screenshot({path:resolve(output,'home-desktop.png')});
 const title='Build a job queue in Go — browser integration '+Date.now();

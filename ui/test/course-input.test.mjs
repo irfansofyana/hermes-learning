@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readCourseFiles,linkMaterial,pastedMaterial,prepareCourse,COURSE_MAX_CHARS} from '../src/course-input.mjs';
+import {readCourseFiles,linkMaterial,prepareCourse,COURSE_MAX_CHARS} from '../src/course-input.mjs';
 const file=(name,content)=>({name,size:new TextEncoder().encode(content).length,arrayBuffer:async()=>new TextEncoder().encode(content).buffer});
 test('multiple imports preserve readable files and report every unsupported file',async()=>{
  const items=await readCourseFiles([file('notes.md','# Notes'),file('report.pdf','binary'),file('queue.go','package main')]);
@@ -10,24 +10,23 @@ test('source links allow only HTTP(S) and remain explicitly unread',()=>{
  assert.throws(()=>linkMaterial('javascript:alert(1)'),/HTTP/);assert.throws(()=>linkMaterial('file:///etc/passwd'),/HTTP/);
  const source=linkMaterial('https://example.org/repository');assert.equal(source.read_status,'unread');assert.equal(source.excerpt,'');
 });
-test('a topic can proceed with failed files while a source-only empty request cannot',()=>{
+test('a topic can proceed with failed files while a source-only empty request cannot',async()=>{
  const broken={title:'report.pdf',error:'Unsupported PDF'};
  assert.throws(()=>prepareCourse({prompt:'',items:[broken]}),/topic|readable/i);
  assert.equal(prepareCourse({prompt:'Learn queue design',items:[broken]}).materials.length,0);
- const fromSources=prepareCourse({prompt:'',items:[{material:pastedMaterial('Useful notes')}]});
+ const fromSources=prepareCourse({prompt:'',items:await readCourseFiles([file('notes.md','Useful notes')])});
  assert.equal(fromSources.intent,'sources');assert.ok(fromSources.interest.trim());assert.equal('read_status' in fromSources.materials[0],false);
 });
-test('pasted text and aggregate source limits reject oversized input without truncation',()=>{
- assert.throws(()=>pastedMaterial('a'.repeat(50001)),/50,000/);
- const material=pastedMaterial('a'.repeat(50000));
+test('aggregate file-source limits reject oversized input without truncation',async()=>{
+ const [{material}]=await readCourseFiles([file('notes.md','a'.repeat(50000))]);
  assert.throws(()=>prepareCourse({prompt:'Study this',items:Array.from({length:Math.ceil(COURSE_MAX_CHARS/50000)+1},()=>({material}))}),/combined|total/i);
 });
-test('preparation preserves full learner request, source locators, sharing and selected level',()=>{
- const result=prepareCourse({prompt:'Build a worker pool in Go',level:'advanced',items:[{material:pastedMaterial('go notes','Concurrency notes')}]});
- assert.equal(result.intent,'project');assert.equal(result.level,'advanced');assert.equal(result.materials[0].sharing,'selected-excerpts');assert.equal(result.materials[0].locator,'Pasted material');assert.equal(result.prompt,'Build a worker pool in Go');
+test('preparation preserves full learner request, source locators, sharing and selected level',async()=>{
+ const result=prepareCourse({prompt:'Build a worker pool in Go',level:'advanced',items:await readCourseFiles([file('Concurrency.md','go notes')])});
+ assert.equal(result.intent,'project');assert.equal(result.level,'advanced');assert.equal(result.materials[0].sharing,'selected-excerpts');assert.equal(result.materials[0].locator,'File: Concurrency.md');assert.equal(result.prompt,'Build a worker pool in Go');
 });
-test('UTF-8 aggregate limit handles multibyte material before model work',()=>{
- const material=pastedMaterial('界'.repeat(40000));
+test('UTF-8 aggregate limit handles multibyte material before model work',async()=>{
+ const [{material}]=await readCourseFiles([file('notes.md','界'.repeat(40000))]);
  assert.throws(()=>prepareCourse({prompt:'Study notes',items:[{material},{material}]}),/combined/);
 });
 test('links with embedded credentials are rejected and long paths keep bounded titles',()=>{

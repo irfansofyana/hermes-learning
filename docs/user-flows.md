@@ -5,7 +5,7 @@ Learning starts with a useful lesson. The tutor lives beside it, using the confi
 ## Start with a topic, project, or sources
 
 1. Open Learning and enter what you want to learn or build. For example: “Build a job queue in Go using these notes.”
-2. Optionally choose a level; beginner is the default. Attach multiple text, Markdown, or code files, paste material, or add HTTP(S) source/repository links.
+2. Optionally choose a level; beginner is the default. Attach multiple text, Markdown, or code files, or add HTTP(S) source/repository links.
 3. Check the material list. Unsupported or unreadable files remain visible with their individual errors. Remove or replace them, or proceed with the usable request and sources. Links begin marked as unread.
 4. Choose **Generate learning path**. This saves the request and material and authorizes the configured model to prepare an outline and the first lesson.
 5. Read the outline as it becomes available, then the complete first lesson. Generation begins from the supplied information without an initial interview or separate path approval.
