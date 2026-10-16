@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {build} from 'esbuild';
+import {loadRenderedModule} from './render-module.mjs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-const built=await build({entryPoints:[new URL('../src/CourseContent.jsx',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'node',loader:{'.jsx':'jsx'}});
-const {Markdown}=await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
+const {Markdown}=await loadRenderedModule('../src/CourseContent.jsx');
 const render=content=>renderToStaticMarkup(React.createElement(Markdown,{content}));
 test('saved opaque citations show a missing-link label instead of raw provider tokens',()=>{
  const html=render('Kafka retains events. \uE200cite\uE202turn1view0\uE202turn0search2\uE201');

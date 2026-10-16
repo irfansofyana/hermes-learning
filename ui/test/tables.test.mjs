@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {build} from 'esbuild';
+import {loadRenderedModule} from './render-module.mjs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
-const built=await build({entryPoints:[new URL('../src/CourseContent.jsx',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'node',loader:{'.jsx':'jsx'}});
-const {Markdown}=await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
+const {Markdown}=await loadRenderedModule('../src/CourseContent.jsx');
 const render=content=>renderToStaticMarkup(React.createElement(Markdown,{content}));
 const kafkaTable=`| Send step | Record key | Event | Partition | Assigned offset |
 |---|---|---|---|---|
@@ -43,5 +42,5 @@ test('ordinary pipe text and fenced table examples remain text rather than table
 test('a heading or code fence after a table is not swallowed as another data row',()=>{
  const html=render('| A | B |\n|---|---|\n| one | two |\n## Next | section\n\n| C | D |\n|---|---|\n| three | four |\n```text|example\nliteral | code\n```');
  assert.equal((html.match(/<table>/g)||[]).length,2);assert.equal((html.match(/<td[ >]/g)||[]).length,4);
- assert.ok(html.includes('<h3>Next | section</h3>'));assert.ok(html.includes('<code>literal | code</code>'));
+ assert.ok(html.includes('<h3>Next | section</h3>'));assert.match(html,/<pre\b[^>]*>[\s\S]*literal \| code[\s\S]*<\/pre>/);
 });

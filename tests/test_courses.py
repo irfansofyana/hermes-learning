@@ -1,4 +1,6 @@
 import concurrent.futures
+import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -30,6 +32,113 @@ class CourseTests(unittest.TestCase):
 
     def read(self, start, channel='ui_direct'):
         return self.call('course_read', track_id=start['track_id'], channel=channel)
+
+    def visuals(self):
+        return [
+            {'type': 'sequence', 'participants': [{'id': 'client', 'label': 'Client'}, {'id': 'queue', 'label': 'Queue'}],
+             'steps': [{'from': 'client', 'to': 'queue', 'label': 'Push A'}, {'from': 'queue', 'to': 'client', 'label': 'Return A'}]},
+            {'type': 'state-machine', 'states': [{'id': 'idle', 'label': 'Idle'}, {'id': 'ready', 'label': 'Ready'}], 'initial': 'idle',
+             'steps': [{'from': 'idle', 'to': 'ready', 'label': 'Push'}, {'from': 'ready', 'to': 'idle', 'label': 'Pop'}]},
+            {'type': 'code-trace', 'code': 'x = 1\nx += 1', 'language': 'python',
+             'steps': [{'line': 1, 'label': 'Initialize', 'variables': [{'name': 'x', 'value': '1'}]},
+                       {'line': 2, 'label': 'Increment', 'variables': [{'name': 'x', 'value': '2'}]}]},
+        ]
+
+    def test_lesson_visuals_publish_all_steps_and_retry_after_normalization(self):
+        for visual in self.visuals():
+            for visibility in (None, 0, 1, 2):
+                with self.subTest(kind=visual['type'], visible_steps=visibility):
+                    start = self.start(f"{visual['type']}-{visibility}")
+                    self.plan(start)
+                    supplied = copy.deepcopy(visual)
+                    if visibility is not None:
+                        supplied['visible_steps'] = visibility
+                    saved = self.lesson(start, visual=supplied)
+                    self.assertEqual(saved['lesson']['visual']['visible_steps'], 2)
+                    self.assertEqual(len(saved['lesson']['visual']['steps']), 2)
+                    self.assertEqual(self.lesson(start, visual=supplied), saved)
+                    self.assertEqual(self.lesson(start, visual={**supplied, 'visible_steps': 2}), saved)
+                    changed = copy.deepcopy(supplied)
+                    changed['steps'][1]['label'] = 'Different explanation'
+                    with self.assertRaises(runtime.LearningError):
+                        self.lesson(start, visual=changed)
+                    for channel in ('ui_direct', 'chat_relayed'):
+                        self.assertEqual(self.read(start, channel)['lessons'], [saved['lesson']])
+
+    def test_legacy_lesson_visuals_read_fully_without_rewriting_and_retry_identically(self):
+        for visual in self.visuals():
+            with self.subTest(kind=visual['type']):
+                start = self.start(visual['type'])
+                self.plan(start)
+                lesson = self.lesson(start, visual=visual)['lesson']
+                lesson['visual']['visible_steps'] = 1
+                publication = {key: lesson[key] for key in ('key', 'title', 'content', 'source_ids', 'visual')}
+                with self.store._connection() as db:
+                    self.store._put(db, 'lesson', lesson, True)
+                    job = self.store._get(db, 'course_job', start['job_id'])
+                    job['lesson_hash'] = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
+                    self.store._put(db, 'course_job', job, True)
+                    before = db.execute('SELECT id, data FROM records ORDER BY seq').fetchall()
+                for channel in ('ui_direct', 'chat_relayed'):
+                    projected = self.read(start, channel)['lessons'][0]
+                    self.assertEqual(projected['visual']['visible_steps'], 2)
+                    self.assertEqual(projected['visual']['steps'], lesson['visual']['steps'])
+                self.assertEqual(self.lesson(start, visual=visual)['lesson'], projected)
+                with self.assertRaises(runtime.LearningError):
+                    self.lesson(start, visual=visual, content='Changed legacy lesson')
+                changed = copy.deepcopy(visual)
+                changed['steps'][1]['label'] = 'Changed legacy step'
+                with self.assertRaises(runtime.LearningError):
+                    self.lesson(start, visual=changed)
+                with self.store._connection() as db:
+                    self.assertEqual(db.execute('SELECT id, data FROM records ORDER BY seq').fetchall(), before)
+
+    def test_lesson_visual_validation_preserves_bounds_and_reference_checks(self):
+        for visual in self.visuals():
+            with self.subTest(kind=visual['type']):
+                start = self.start(visual['type'])
+                self.plan(start)
+                invalid = [
+                    {**visual, 'visible_steps': value} for value in (-1, 3, True)
+                ] + [{**visual, 'steps': []}, {**visual, 'steps': visual['steps'] * 16},
+                     {**visual, 'schema_version': 2}, {**visual, 'markup': '<svg />'}]
+                bad_reference = copy.deepcopy(visual)
+                bad_reference['steps'][0].update({'line': 3} if visual['type'] == 'code-trace' else {'to': 'missing'})
+                invalid.append(bad_reference)
+                if visual['type'] == 'state-machine':
+                    invalid.append({**visual, 'initial': 'missing'})
+                    discontinuous = copy.deepcopy(visual)
+                    discontinuous['steps'][1]['from'] = 'idle'
+                    invalid.append(discontinuous)
+                for payload in invalid:
+                    with self.subTest(payload=payload), self.assertRaises(runtime.LearningError):
+                        self.lesson(start, visual=payload)
+                self.assertEqual(self.read(start)['lessons'], [])
+                self.assertEqual(self.read(start)['jobs'][0]['status'], 'generating')
+                self.assertEqual(self.lesson(start, visual=visual)['lesson']['visual']['visible_steps'], 2)
+
+    def test_lesson_visibility_does_not_unlock_practice_or_restricted_sources(self):
+        for visual in self.visuals():
+            with self.subTest(kind=visual['type']):
+                start = self.start(visual['type'], materials=[{'title': 'Private', 'kind': 'notes', 'sharing': 'metadata-only', 'excerpt': 'PRIVATE EXAMPLE'}])
+                self.plan(start)
+                source_id = self.read(start)['sources'][0]['id']
+                lesson = self.lesson(start, channel='ui_direct', visual=visual, source_ids=[source_id])['lesson']
+                self.assertEqual(lesson['visual']['visible_steps'], 2)
+                restricted = self.read(start, 'chat_relayed')['lessons'][0]
+                self.assertTrue(restricted['content_withheld'])
+                self.assertIsNone(restricted['visual'])
+                activity = self.call('activity', context_id=start['context_id'], title='Predict', kind='prediction', prompt='What happens next?', criteria=['Explain the next step'], solution='PRIVATE SOLUTION', visual=visual)['activity']
+                for channel in ('ui_direct', 'chat_relayed'):
+                    gated = self.call('activity_read', channel=channel, activity_id=activity['id'])['activity']
+                    self.assertEqual(gated['visual']['visible_steps'], 1)
+                    self.assertEqual(len(gated['visual']['steps']), 1)
+                    self.assertNotIn('solution', gated)
+                run = self.call('run', context_id=start['context_id'], activity_id=activity['id'])
+                self.call('submit', context_id=start['context_id'], run_id=run['run_id'], answer='My prediction')
+                unlocked = self.call('activity_read', context_id=start['context_id'], activity_id=activity['id'])['activity']
+                self.assertEqual(unlocked['visual']['visible_steps'], 2)
+                self.assertEqual(len(unlocked['visual']['steps']), 2)
 
     def test_start_is_atomic_and_concurrent_retry_is_idempotent(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:

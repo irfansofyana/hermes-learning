@@ -17,6 +17,10 @@ Supported source imports are UTF-8 text, Markdown, and code, plus pasted passage
 
 Desktop uses `host.request` and `host.onEvent`; web uses an authenticated host WebSocket. Approval and clarification requests require explicit learner responses. Conversation bindings are scoped to the learning store/profile; context capabilities remain revocable permissions rather than authenticated conversation identities. The current manifest declares 21 tools.
 
+Lessons and tutor replies support CommonMark plus GitHub-style tables, task lists, strikethrough, autolinks and footnotes. Language-labelled code fences use syntax highlighting with copy controls; unknown or omitted languages remain readable plain code. Raw HTML stays escaped and image references become links. Lessons optionally carry one structured sequence, state-machine or code-trace visual with step navigation and a text alternative. Lesson walkthroughs expose all published steps, including older lessons saved with activity-style visibility; assessed activities retain their hidden-step gates. Trace lines and variable values are authored illustrations and do not establish that code ran. Visual schemas remain version 1 with 1–30 steps, at most 10 sequence participants or 20 states. Arbitrary Mermaid, HTML/SVG, rendering scripts and code execution are unsupported.
+
+The rich-lesson pass was checked against the same isolated Hermes v0.22.2 host: a configured model saved a Python lesson with a five-step code trace and completed its generation job. Actual Electron restored that lesson, rendered syntax tokens, copied code, and stepped through the trace without page errors. Disposable preview checks covered all three visual types, keyboard controls, code copying, footnote return links, legacy practice gates, and light desktop/dark mobile layouts. Browser plugin was unavailable, so these checks used Playwright.
+
 ## Earlier implementation evidence
 
 The sections below document earlier record-management and chat-handoff releases. References to path approval, 17 tools, or preparing commands describe those releases and the retained **Learning records** view, not the current primary experience.

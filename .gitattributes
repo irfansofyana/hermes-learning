@@ -1,0 +1,3 @@
+# Bundled language grammars contain meaningful whitespace in template literals.
+dashboard/dist/index.js -whitespace
+desktop/plugin.js -whitespace

@@ -466,6 +466,15 @@ class Store:
             fail('visible_steps is outside the visual')
         return {**result, 'steps': clean_steps, 'visible_steps': visible}
 
+    def _lesson_visual(self, visual):
+        visual = self._visual(visual)
+        # Lesson walkthroughs are fully published explanations. The same schema
+        # uses visible_steps to withhold answers only in assessed activities.
+        return {**visual, 'visible_steps': len(visual['steps'])} if visual else None
+
+    def _lesson_view(self, lesson):
+        return {**lesson, 'visual': self._lesson_visual(lesson.get('visual'))}
+
     def _course_job_view(self, job):
         return {key: value for key, value in job.items() if key not in ('context_id', 'request_hash')}
 
@@ -482,7 +491,7 @@ class Store:
             track = self._get(db, 'track', p.get('track_id'))
             tid = track['id']
             course = self._course_data(db, tid) or {}
-            lessons = self._all(db, 'lesson', tid)
+            lessons = [self._lesson_view(lesson) for lesson in self._all(db, 'lesson', tid)]
             for lesson in lessons:
                 if channel == 'chat_relayed' and any(self._get(db, 'source', sid, tid)['sharing'] == 'metadata-only' for sid in lesson['source_ids']):
                     lesson.update(content=WITHHELD, title='Lesson with restricted source', visual=None, content_withheld=True)
@@ -694,12 +703,16 @@ class Store:
             if '\ue200cite' in content:
                 fail('Use Markdown source links with the actual URL, not internal citation markers. Correct the content and retry this same job.', 'invalid_citation')
             publication = {'key': key, 'title': item['title'], 'content': content,
-                           'source_ids': source_ids, 'visual': self._visual(p.get('visual'))}
+                           'source_ids': source_ids, 'visual': self._lesson_visual(p.get('visual'))}
             digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
             if job.get('lesson_hash'):
+                saved = self._lesson_view(self._get(db, 'lesson', job['lesson_id'], tid))
                 if job['lesson_hash'] != digest:
-                    fail('Lesson already published with different content', 'revision_conflict', 409)
-                return {'lesson': self._get(db, 'lesson', job['lesson_id'], tid)}
+                    # Old lessons hashed activity-style visibility. Accept only
+                    # the identical normalized publication, without rewriting it.
+                    if {key: saved[key] for key in publication} != publication:
+                        fail('Lesson already published with different content', 'revision_conflict', 409)
+                return {'lesson': saved}
             if job['status'] not in ('queued', 'generating'):
                 fail('Generation job has ended; explicitly generate again', 'job_closed', 409)
             if any(lesson['key'] == key for lesson in self._all(db, 'lesson', tid)):

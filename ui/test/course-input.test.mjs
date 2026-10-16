@@ -35,11 +35,10 @@ test('links with embedded credentials are rejected and long paths keep bounded t
  assert.equal(linkMaterial('https://example.org/'+ 'a'.repeat(400)).title.length,300);
 });
 test('generated Markdown renders source HTML and unsafe links as inert text',async()=>{
- const {build}=await import('esbuild');
+ const {loadRenderedModule}=await import('./render-module.mjs');
  const {renderToStaticMarkup}=await import('react-dom/server');
  const React=await import('react');
- const built=await build({entryPoints:[new URL('../src/CourseContent.jsx',import.meta.url).pathname],bundle:true,write:false,format:'esm',platform:'node',loader:{'.jsx':'jsx'}});
- const {Markdown}=await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
+ const {Markdown}=await loadRenderedModule('../src/CourseContent.jsx');
  const markup=renderToStaticMarkup(React.createElement(Markdown,{content:'# Test\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert) [safe](https://example.org)\n\n```html\n<img src=x onerror=alert(1)>\n```'}));
  assert.ok(!markup.includes('<script>'));assert.ok(!markup.includes('<img '));assert.ok(!markup.includes('href="javascript:'));assert.ok(markup.includes('href="https://example.org/"'));assert.ok(markup.includes('&lt;script&gt;'));
 });

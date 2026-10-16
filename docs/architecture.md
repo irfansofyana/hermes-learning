@@ -68,7 +68,11 @@ Supplied text is marked `provided`; links begin `unread`. Retrieval can record `
 
 External research citations use ordinary Markdown links containing the actual retrieved URL. Attached material still uses validated `source_ids`. Lesson publication rejects internal provider citation markers with a retryable validation error; older unresolved markers display a missing-source-link label instead of exposing search handles or guessing a URL.
 
-The UI renders Markdown as escaped React elements. Tables render with column headers, alignment, inline formatting, and a keyboard-focusable horizontal scrolling region for narrow screens. Raw HTML, scripts, source code, and arbitrary visual markup are not interpreted. Sequence, state-machine, and code-trace visuals use the existing bounded schemas and fixed components, with source disclosure and hidden-step gates enforced by the service.
+The UI renders CommonMark and GitHub-style tables, task lists, strikethrough, autolinks and footnotes through React Markdown. Raw HTML remains escaped text, and image references become safe links instead of automatically loading remote media. Tables preserve column headers, alignment, inline formatting and horizontal scrolling on narrow screens. Fenced code uses its language name for syntax highlighting, includes a copy control, and falls back to plain code for unknown or omitted languages. Rendering code never executes it.
+
+Each lesson can include one structured schema-1 sequence, state-machine or code-trace visual, rendered by fixed components with step navigation and a text alternative. Code traces highlight the referenced source line and show authored variable values; these are teaching examples, not execution evidence. Visuals allow 1–30 steps, at most 10 sequence participants or 20 states, valid node references, continuous state transitions and 1-based code-line references. Mermaid, raw HTML/SVG and arbitrary rendering scripts are not supported diagram inputs.
+
+Lesson publication validates the existing visual schema, then normalizes `visible_steps` to the full step count before computing its idempotency hash. Reading older lessons projects the same complete visibility without rewriting stored records. Identical legacy retries compare normalized publication content; changed content still conflicts. Assessed activities retain their separate hidden-step and solution gates. Source disclosure applies before a lesson is returned to the model: restricted derived content also withholds its visual.
 
 ## Practice evidence and storage
 

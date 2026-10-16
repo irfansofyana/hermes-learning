@@ -1,9 +1,16 @@
 import {build} from 'esbuild';
+import './generate-notices.mjs';
 import {mkdir,writeFile,readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 const root=fileURLToPath(new URL('.',import.meta.url));
 const base={bundle:true,jsx:'transform',loader:{'.css':'text','.svg':'text'},target:'es2020',logLevel:'info',absWorkingDir:root,define:{'process.env.NODE_ENV':'"production"'},minify:true};
-const hostReact={name:'host-react',setup(b){b.onResolve({filter:/^react$/},()=>({path:'react',namespace:'hermes'}));b.onLoad({filter:/.*/,namespace:'hermes'},()=>({contents:'module.exports = window.__HERMES_PLUGIN_SDK__.React;',loader:'js'}));}};
+const hostReact={name:'host-react',setup(b){
+ b.onResolve({filter:/^react(?:\/jsx-runtime)?$/},args=>({path:args.path,namespace:'hermes'}));
+ b.onLoad({filter:/.*/,namespace:'hermes'},args=>({contents:args.path==='react'?'module.exports = window.__HERMES_PLUGIN_SDK__.React;':`const React = require('react');
+const jsx = (type,props,key) => React.createElement(type,key === undefined ? props : {...props,key});
+module.exports = {jsx,jsxs:jsx,Fragment:React.Fragment};`,loader:'js'}));
+}};
+
 await build({...base,entryPoints:['src/dashboard.jsx'],outfile:'../dashboard/dist/index.js',format:'iife',plugins:[hostReact]});
 await build({...base,entryPoints:['src/desktop.jsx'],outfile:'../desktop/plugin.js',format:'esm',external:['react','@hermes/plugin-sdk']});
 await build({...base,entryPoints:['src/preview.jsx'],outfile:'dist/preview.js',format:'iife'});

@@ -91,3 +91,9 @@ node spikes/001-cross-client-learning/tests/check_recovery.cjs
 Backend tests cover course job authorization/idempotency, publication and source boundaries, legacy evidence, context revocation, concurrent startup, and restoration. UI unit tests cover input limits, inert Markdown rendering, host transport lifecycle, session identity/history, permission handling, interruption, and uncertain delivery without replay. Preview HTTP tests cover authentication, origin/Host checks, action envelopes, routes, and static path restrictions.
 
 `dev/evaluate.py` checks deterministic tool/record scenarios, not teaching quality. Live-model evaluation and its limits are documented in [the evaluation guide](../docs/evaluations/tutoring.md). Keep simulated UI checks, real-host integration, and model-quality evidence distinct when reporting results.
+
+## Rich lesson rendering checks
+
+With a fresh empty local preview store, run `dev/check-rendering.mjs` using the same `LEARNING_PREVIEW_URL`, `PLAYWRIGHT_MODULE`, `CHROME_PATH`, and optional sandbox settings as the integration check. It refuses nonempty stores and requires the simulated-preview label. It creates three synthetic lessons to verify highlighted code and clipboard text, GFM content and footnote return links, all visual types and keyboard stepping, and light desktop/dark mobile layouts. Screenshots default to `/tmp/hermes-learning-rendering-check`; override with `LEARNING_SCREENSHOT_DIR`. No model runs or real-host data changes are involved.
+
+Production UI bundles include pinned Markdown and syntax-highlighting dependencies. `npm --prefix ui run build` regenerates `THIRD_PARTY_NOTICES.md`, which is included in the release-file list.

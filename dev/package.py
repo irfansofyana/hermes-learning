@@ -12,7 +12,7 @@ NAME = 'hermes-learning'
 VERSION = '0.1.0'
 # Deliberately enumerate files; never recursively include a plugin directory.
 FILES = (
-    'plugin.yaml', '__init__.py', 'runtime.py', 'learning_store.py',
+    'plugin.yaml', '__init__.py', 'runtime.py', 'learning_store.py', 'THIRD_PARTY_NOTICES.md',
     'dashboard/manifest.json', 'dashboard/plugin_api.py', 'dashboard/dist/index.js',
     'skills/teach/SKILL.md', 'skills/humanizer/SKILL.md',
     'desktop/plugin.js', 'desktop/package.json',

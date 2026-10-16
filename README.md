@@ -8,7 +8,7 @@ A personal learning workspace for [Hermes Agent](https://github.com/NousResearch
 
 - **Start learning immediately.** Enter what you want to learn or build, optionally choose a level, and generate an outline and a complete first lesson.
 - **Bring your own material.** Attach multiple text, Markdown, or code files, paste notes, or add source and repository links. Each source shows whether its text is available or retrieval failed.
-- **Read and ask in one place.** Follow the lesson outline, explore diagrams, ask for a simpler explanation or another example, and chat with the tutor beside the lesson.
+- **Read and ask in one place.** Follow lessons with formatted Markdown, tables, highlighted code you can copy, and step-by-step sequence diagrams, state machines, or code traces. Ask for a simpler explanation or another example beside the lesson.
 - **Continue later.** Reopen your last lesson and its tutor conversation. Generate later lessons when you select them.
 - **Keep your existing records.** Saved activities, answers, assessments, reviews, and detailed progress remain available under Learning records.
 
@@ -34,7 +34,7 @@ Open Learning and enter a topic or project. Desktop and web use the same saved w
 
 ## Status
 
-This is an early, personal-use plugin. File import supports UTF-8 text, Markdown, and code; PDF and image import are not available. Links remain unread until retrieval succeeds. Source citations do not independently verify a claim, and reading progress is not a mastery score.
+This is an early, personal-use plugin. File import supports UTF-8 text, Markdown, and code; PDF and image import are not available. Links remain unread until retrieval succeeds. Source citations do not independently verify a claim, and reading progress is not a mastery score. Visuals are optional, bounded walkthroughs supplied by the tutor; arbitrary diagram markup and code execution are not supported.
 
 See [compatibility and known limits](docs/compatibility.md) for verified host behavior and remaining work. The local development preview labels its simulated tutor output explicitly.
 
