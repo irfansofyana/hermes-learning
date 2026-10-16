@@ -17,6 +17,9 @@ dist/
 # This spike ships a hand-authored dashboard IIFE, not generated build output.
 !spikes/001-cross-client-learning/plugin/dashboard/dist/
 !spikes/001-cross-client-learning/plugin/dashboard/dist/index.js
+# Coordinated release artifacts generated from the shared workspace source.
+!plugin/dashboard/dist/
+!plugin/dashboard/dist/index.js
 .DS_Store
 # Private isolated test runtime; the default runner stores it outside this repo.
 /spike-runtime/
