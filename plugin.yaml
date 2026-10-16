@@ -1,25 +1,11 @@
 name: hermes-learning
 version: "0.1.0"
-description: "Study topics, practise with sources, and save your answers. Tracking starts only when you choose it."
+description: "Turn topics, projects, and your own sources into lessons with a tutor inside Learning."
 provides_tools:
   - learning_course_source
   - learning_course_read
   - learning_course_plan
   - learning_course_lesson
-  - learning_activity
-  - learning_activity_read
-  - learning_activity_revision
-  - learning_assess
-  - learning_brief
-  - learning_dispute
-  - learning_help
-  - learning_leave
-  - learning_quote_check
-  - learning_recommendation
-  - learning_resume_brief
-  - learning_run
-  - learning_source
   - learning_source_read
+  - learning_quote_check
   - learning_state
-  - learning_submit
-  - learning_track

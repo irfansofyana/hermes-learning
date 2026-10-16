@@ -1,7 +1,7 @@
 {
   "name": "hermes-learning",
   "label": "Learning",
-  "description": "Study topics, practise with sources, and save your answers. Tracking starts only when you choose it.",
+  "description": "Turn topics, projects, and your own sources into lessons with a tutor inside Learning.",
   "icon": "BookOpen",
   "version": "0.1.0",
   "tab": {"path": "/learning", "position": "end", "hidden": false},

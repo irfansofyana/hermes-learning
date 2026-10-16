@@ -1,6 +1,6 @@
 # Architecture
 
-The primary interface generates lessons and runs a tutor inside Learning. The service retains the existing activity/evidence system and adds course records without reinterpreting historical answers. [Compatibility](compatibility.md) records runtime verification; [the integrated design](superpowers/specs/2026-10-16-integrated-learning-design.md) describes the intended experience and constraints.
+The primary interface generates lessons and runs a tutor inside Learning. The retired activity-management app and chat-command entry flow are no longer registered or bundled. [Compatibility](compatibility.md) records runtime verification; [the integrated design](superpowers/specs/2026-10-16-integrated-learning-design.md) describes the intended experience and constraints.
 
 ```text
 Desktop UI -- host.request / host.onEvent --+
@@ -13,7 +13,7 @@ Shared React learning workspace           |       Learning model tools
 
 ## Ownership and boundaries
 
-Hermes owns conversation history, model credentials, agent execution, and tool permissions. Learning owns paths, lessons, supplied sources, generation jobs, reading position, and practice evidence. The plugin uses public session operations; it does not write to Hermes conversation tables or introduce a separate model provider.
+Hermes owns conversation history, model credentials, agent execution, and tool permissions. Learning owns paths, lessons, supplied sources, generation jobs, reading position, and tutor bindings. The plugin uses public session operations; it does not write to Hermes conversation tables or introduce a separate model provider.
 
 **Generate learning path** authorizes creation of the requested path, its material, and bounded model work. **Continue** establishes or recovers the path's learning context and restores its conversation without submitting a prompt. Ordinary mounting reads saved state. Neither learning vocabulary in an unrelated chat nor loading a teaching skill authorizes plugin persistence.
 
@@ -21,7 +21,7 @@ Repository material is read-only teaching input. Imported code and model-generat
 
 ## Records and actions
 
-The API remains version 1. Additive records live beside existing tracks, activities, runs, attempts, assistance, assessments, and reviews:
+The API and storage schema remain version 1. The current workspace uses these records:
 
 | Record | Responsibility |
 | --- | --- |
@@ -87,3 +87,9 @@ The server-local SQLite store uses guarded initialization, transactional writes,
 The repository root is the installable package. Shared React sources build committed Desktop and dashboard bundles. Remote backend installation and local Desktop frontend installation are distinct requirements.
 
 The development preview uses the real Learning service with an explicitly simulated tutor transport. It verifies UI and persistence flows without model calls, link retrieval, or daily-profile changes. Production bundles use host transports only. Unit tests, preview browser checks, and isolated real-host tests establish different boundaries; passing one does not establish the others. See [development](../dev/README.md) and [compatibility](compatibility.md).
+
+## Retired experience
+
+There is one frontend: home → path → lesson, with source material and the embedded tutor. There is no secondary Learning records app, activity form, review queue, or main-chat handoff. The teaching package exposes seven course/source tools; the old practice tools and `/learning-track` command are not registered. Internal record-service operations remain for shared implementation and API compatibility, but are not a second product flow.
+
+Old data is discarded rather than converted into courses. `dev/retire_legacy.py` removes legacy-only tracks and their associated records, plus activity/answer/assessment/review/help/run/recommendation records even when attached to a course. It keeps current courses, lessons, materials, jobs, positions and bindings. Cleanup is an explicit operator action, not a destructive read or automatic upgrade. Each client also clears the old interface's draft, location and handoff storage when Learning opens.

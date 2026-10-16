@@ -40,11 +40,11 @@ If the connection drops after a request may have been accepted, Learning does no
 
 When returning to an unfinished generation job, the service recovers its authorizing context so the restored conversation can complete or stop that job. A new generation request is a deliberate action; it does not silently replace saved lessons.
 
-## Existing practice and ordinary chat
+## Practice and ordinary chat
 
-**Learning records** opens the existing activities, sources, attempts, assessments, disputes, review queue, and detailed progress. Historical evidence remains intact. Submitting a practice answer saves it awaiting assessment; it does not automatically assign a grade. Hints, reveals, exact answers, criteria, and superseding feedback retain their existing evidence rules.
+Practice is optional and stays beside the lesson in the tutor conversation. Ask for an exercise, discuss an answer, or request a hint without starting a separate activity, submitting a graded attempt, or opening a records page. Read markers record reading, not mastery.
 
-Ordinary educational chat outside Learning remains ad hoc unless the user explicitly starts or resumes tracked study. `/learning-track` remains available for that workflow. A side question is not an assessed attempt, and another chat does not inherit the workspace's context automatically. Host conversation retention is separate from Learning's records.
+Educational chat outside Learning remains ordinary chat. Open Learning to create a saved path. Manual track approvals, `/learning-track` commands, the review queue, and copied tutor requests are retired. Legacy records are discarded rather than imported into the new experience; current paths and their lessons continue normally. Host conversation retention is separate from Learning data.
 
 ## Verification scenarios
 

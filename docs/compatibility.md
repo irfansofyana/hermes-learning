@@ -15,19 +15,25 @@ The host bootstrap required the existing temporary `Path` annotation workaround 
 
 Supported source imports are UTF-8 text, Markdown, and code, plus pasted passages and HTTP(S) source/repository links. Links begin unread; retrieval depends on host reading tools. Retrieval status is agent-reported, not independent verification. PDF/image ingestion, automatic repository execution, offline model work, multi-user authorization, and arbitrary host versions are not supported by this verification. Published lessons and outlines are immutable; requesting different assumptions changes the tutor conversation rather than rewriting the saved path.
 
-Desktop uses `host.request` and `host.onEvent`; web uses an authenticated host WebSocket. Approval and clarification requests require explicit learner responses. Conversation bindings are scoped to the learning store/profile; context capabilities remain revocable permissions rather than authenticated conversation identities. The current manifest declares 21 tools.
+Desktop uses `host.request` and `host.onEvent`; web uses an authenticated host WebSocket. Approval and clarification requests require explicit learner responses. Conversation bindings are scoped to the learning store/profile; context capabilities remain revocable permissions rather than authenticated conversation identities. The current manifest declares seven course/source tools. The old practice tools and `/learning-track` command are retired.
 
 Lessons and tutor replies support CommonMark plus GitHub-style tables, task lists, strikethrough, autolinks and footnotes. Language-labelled code fences use syntax highlighting with copy controls; unknown or omitted languages remain readable plain code. Raw HTML stays escaped and image references become links. Lessons optionally carry one structured sequence, state-machine or code-trace visual with step navigation and a text alternative. Lesson walkthroughs expose all published steps, including older lessons saved with activity-style visibility; assessed activities retain their hidden-step gates. Trace lines and variable values are authored illustrations and do not establish that code ran. Visual schemas remain version 1 with 1–30 steps, at most 10 sequence participants or 20 states. Arbitrary Mermaid, HTML/SVG, rendering scripts and code execution are unsupported.
 
 The rich-lesson pass was checked against the same isolated Hermes v0.22.2 host: a configured model saved a Python lesson with a five-step code trace and completed its generation job. Actual Electron restored that lesson, rendered syntax tokens, copied code, and stepped through the trace without page errors. Disposable preview checks covered all three visual types, keyboard controls, code copying, footnote return links, legacy practice gates, and light desktop/dark mobile layouts. Browser plugin was unavailable, so these checks used Playwright.
 
+## Records interface retirement
+
+The retired app and both records navigation links are removed from the production bundles. Its local/session draft and handoff keys are discarded on open. Old backend records are deleted only by the explicit cleanup command; they are not automatically migrated into courses or removed by a read.
+
+Verification on 2026-10-17 passed 83 Python and 73 UI tests, the production build, local Hermes installation detection, and desktop/mobile preview checks. The actual isolated Hermes plugin manager registered seven tools, zero commands, and both readable teaching skills. Actual isolated Electron reopened an existing model-generated lesson, highlighted and copied code, stepped its visual, and showed no records links or page errors. No new model inference was run for this cleanup. Browser plugin was unavailable, so browser checks used Playwright. Disposable-store tests verify that legacy cleanup deletes old tracks and evidence while keeping current course records byte-for-byte, and refuses unrelated databases.
+
 ## Earlier implementation evidence
 
-The sections below document earlier record-management and chat-handoff releases. References to path approval, 17 tools, or preparing commands describe those releases and the retained **Learning records** view, not the current primary experience.
+The sections below document earlier record-management and chat-handoff releases. References to path approval, 17 tools, or preparing commands describe historical releases. That interface and its command flow have since been removed; old records are discarded with the explicit cleanup described in [Data and recovery](data-and-recovery.md).
 
 Hermes Learning targets the plugin registration and dashboard extension APIs inspected in the local Hermes source at commit `d923a5eb487` on 2026-10-16. Source inspection is not a claim that this release was installed or exercised in every host. The daily instance was not installed into, restarted, or modified.
 
-## Adapter contract
+### Adapter contract
 
 The backend plugin ID is `hermes-learning`; the dashboard tab path is `/learning`. Dashboard API routes are relative to the host's authenticated plugin API namespace. `plugin_api.py` loads the runtime by file location, so it does not require the dashboard loader to supply Python package context. Backend registration uses `register_command`, `register_tool`, and `register_skill`, with signatures checked against local host source.
 
@@ -35,9 +41,9 @@ Every operation resolves `plugins.plugin_storage.plugin_data_dir('hermes-learnin
 
 Reads: `GET /state`, `/track/{id}`, `/activity/{id}?context_id=…`, `/source/{id}`, and human-facing `/export`. Mutations use `POST /action` with `{ "action": "…", "params": {}, "api_version": 1 }`. The envelope rejects extra fields, string/bool API versions and unsupported versions. Runtime action schemas reject unsupported keys and bound strings, arrays and structured visuals before service dispatch. Domain validation also guards identifiers, track ownership, revisions and source policy.
 
-HTTP uses `ui_direct`; model tools use `chat_relayed`. There are no model start, resume, approve, recommendation-decision, track-status, review-rescheduling or export tools. Model tools can propose candidate resources, check quotes against policy-permitted stored text, and append immutable activity revisions; only the human workspace accepts or declines recommendations. Source-read and quote-check tool results carry explicit untrusted-content annotations. `/learning-track start <topic>`, `/learning-track resume <track-id>`, `/learning-track approve <context-id> <revision>`, `/learning-track leave <context-id>`, and `/learning-track status` are explicit user commands. Agent assessments cannot claim self attribution. A copied chat handoff does not send a message or automatically run a model.
+HTTP uses `ui_direct`; model tools use `chat_relayed`. The current registered tools publish and read authorized courses and source material. Enrollment happens through Generate/Continue inside Learning. There is no registered command or main-chat handoff. Source-read and quote-check results carry explicit untrusted-content annotations. Older activity and assessment operations remain internal API compatibility code, outside the current product flow.
 
-## Consent and disclosure limits
+### Consent and disclosure limits
 
 Contexts are revocable capabilities, not authenticated session identities. They are not bound to a CLI session, messaging conversation, browser tab or user principal. Keep context IDs private, do not reuse them across unrelated conversations, and leave a context when finished. The tool registry forwards optional trusted `session_id` keyword arguments, but the slash command callback accepts only raw argument text. The inspected gateway binds a route `session_key` before invoking a command, before a durable session entry exists; CLI command dispatch supplies no identity argument. The public session getter falls back to process environment. These are not a proven common identity at both consent and mutation, so the adapter does not bind to a guessed ID or to whichever model first presents a context. A host bridge supplying the same authenticated session identity at both points is required for enforceable session binding. Multi-user deployment needs a separate identity and authorization design.
 
@@ -45,7 +51,7 @@ Source reads apply disclosure policy for the model channel. The human workspace 
 
 The host must provide authentication and enforce trusted human access to the dashboard namespace. This adapter does not independently authenticate the `ui_direct` channel. An authenticated user capable of calling workspace routes has the same learning permissions as the human UI. Local preview authentication and origin checks are separate development-host behavior.
 
-## Evidence and remaining checks
+### Evidence and remaining checks
 
 - Python service and adapter tests run with temporary stores. Adapter tests cover registration, withheld start/resume/approve/export tools, per-operation profile resolution, strict version/envelope checks, actual source filtering, submission channel/assistance, assessment attribution, and direct FastAPI endpoint behavior.
 - The inspected host virtual environment provides FastAPI 0.133.1 and Pydantic 2.13.4. The API model uses a compatibility configuration branch for Pydantic v1, but v1 has not been exercised. System Python without FastAPI skips HTTP adapter tests explicitly.
@@ -56,7 +62,7 @@ The host must provide authentication and enforce trusted human access to the das
 The bundled teaching and prose guidance is original project text. The Humanizer-named adaptation is not a vendored third-party skill and does not claim an upstream project's identity or license; its provenance statement is included in the skill itself.
 
 
-## Isolated host runner
+### Isolated host runner
 
 `dev/hermes.py` stages the allowlisted release files from the repository root into an explicitly owned temporary Hermes home. Its default root is `/tmp/hermes-learning-runtime`; a nonempty directory without the runner ownership marker is refused. It launches the existing host Python environment with a fresh operating-system HOME, fresh HERMES_HOME, minimal environment and no inherited daily credentials. It never installs dependencies or modifies host source. Supply `--source /path/to/hermes-agent` and optionally `--home /tmp/your-isolated-run` to `prepare`, `inspect`, `command`, `tool`, or `serve --port 8878`.
 
@@ -66,7 +72,7 @@ Real inspection found that `/learning` is already a built-in command alias in th
 
 The default isolated dashboard startup failed during the host's FastAPI lifespan: `tui_gateway/methods_onboarding.py:71` references an undefined `Path` in an evaluated annotation. A temporary bootstrap under `/tmp` added only the missing `pathlib.Path` import to that module at test time. This allowed the real host to start on loopback. The installed host source, product plugin, and default runner were not patched. These runtime results therefore apply to the tested host with that specific bootstrap defect compensated; an unmodified checkout containing the defect still needs its host fix before serving.
 
-## Actual frontend verification, 2026-10-16
+### Actual frontend verification, 2026-10-16
 
 Tested local source: `d923a5eb487`; native shell reports Hermes Desktop and backend **v0.22.2**. No claim is made about every Hermes release or arbitrary proxy topology.
 
@@ -86,7 +92,7 @@ The copied desktop source imports only `react` and `@hermes/plugin-sdk`; the web
 
 Initial implementation verification: 39 backend/adapter/preview/packaging tests, 5 workspace recovery/validation tests, 10 historical spike Python tests, and 6 historical recovery checks passed. Both production bundles built and passed JavaScript syntax checks. Browser fault injection confirmed that a lost response retried exactly once, revoked-context rejection retained editable answer text, and accepted recommendations could be attached as curated sources.
 
-## Learning-loop verification, 2026-10-16
+### Learning-loop verification, 2026-10-16
 
 The follow-up implementation adds schema-1 capability flags rather than requiring a storage migration. Historical rows lacking objective links, learner preferences, generated-help content or criterion results remain readable without read-time writes. The UI checks capabilities before sending new fields. Review policy v2 follows linked objectives; unlinked activities retain policy v1.
 
@@ -102,9 +108,9 @@ The follow-up implementation adds schema-1 capability flags rather than requirin
 
 The native handoff prepares two separate messages because Hermes parses the entire slash-command argument. The learner sends the resume command first, waits for confirmation, then copies the tutor request into the same conversation. This check establishes composer preparation and recovery, not a complete live tutoring exchange through Electron. Messaging transports and conversation-bound authorization remain outside this verification.
 
-The repeatable browser check is `dev/check-workspace.mjs`; its setup and fresh-store requirement are documented in [dev/README.md](../dev/README.md). Full suite/build/package results for this pass are recorded in the [implementation plan](superpowers/plans/2026-10-16-learning-loop.md).
+The old workspace browser script was retired with that interface. Current repeatable checks are `dev/check-integrated.mjs` and `dev/check-rendering.mjs`, documented in [dev/README.md](../dev/README.md). Full suite/build/package results for this pass are recorded in the [implementation plan](superpowers/plans/2026-10-16-learning-loop.md).
 
-## Repository URL installation
+### Repository URL installation
 
 The original development layout stored the release files under `plugin/`. Hermes Desktop's Git installer checks the selected package root for `plugin.yaml` plus `__init__.py`, and for `plugin.js` or `desktop/plugin.js`. It does not automatically search arbitrary nested folders. Consequently, installing the plain repository URL returned “No agent or desktop plugin artifacts found in this repository,” even though the separately packaged ZIP worked.
 
@@ -114,7 +120,7 @@ The actual local Hermes detector reproduced `agent=false, desktop=false` before 
 
 The host admission validator additionally required the manifest to declare the 17 registered tools. Its security scan flagged a literal adversarial prompt in the evaluation checklist; that case is now described without quoting the attack instruction. All admission checks, including capability probing, desktop surface checks and the security scan, pass. The validator still reports non-blocking private-import warnings for the development host runners and historical spike; production plugin modules use the public integration surface.
 
-## Product limits
+### Product limits
 
 - Conversation-bound consent needs a verified Hermes identity bridge. Current contexts are revocable private capabilities, not authenticated conversation identities. This is a personal single-user plugin.
 - Chat authoring uses Hermes tools; no new backend inference, search service, PDF ingestion, repository execution, or automatic full-book processing is included.

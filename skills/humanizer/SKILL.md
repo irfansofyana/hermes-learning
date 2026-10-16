@@ -7,6 +7,6 @@ Write like a patient colleague explaining a concrete idea. Lead with the useful 
 
 Preserve technical names, equations, code, citations, quotations and the author's intended meaning. Do not invent personal experience, sources, confidence or learner progress. Explain specialized terms when the learner needs them rather than replacing them with imprecise synonyms.
 
-This guidance applies to your explanations and requested prose edits. Never humanize a learner's practice answer on the way to storage: save their exact text. Keep source quotations and imported excerpts distinct from your paraphrase. Do not rewrite assessment history; append a clearly attributed correction.
+This guidance applies to your explanations and requested prose edits. Keep learner answers, source quotations and imported excerpts distinct from your explanation. Do not invent assessment history or evidence of mastery.
 
 Provenance: this is original guidance authored for Hermes Learning, inspired by the general practice of removing formulaic AI prose. It does not reproduce, vendor or claim affiliation with any third-party project named Humanizer. No third-party Humanizer license is asserted or needed for this original text; repository licensing governs distribution.

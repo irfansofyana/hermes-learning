@@ -35,7 +35,6 @@ node dev/check-integrated.mjs
 
 Omit `PLAYWRIGHT_MODULE` to resolve `playwright` normally and `CHROME_PATH` to use Playwright's installed Chromium. Screenshots default to `/tmp/hermes-learning-integrated-check`; override with `LEARNING_SCREENSHOT_DIR`. Restricted environments may need loopback/browser permission. `LEARNING_BROWSER_NO_SANDBOX=1` is an explicit opt-in for disposable containers that cannot use Chromium's sandbox.
 
-`dev/check-workspace.mjs` is the earlier legacy activity/evidence check. It was written for the former default entry screen and is not the current integrated-preview smoke test. Its activity, hint, feedback, progress, source, and visual scenarios remain useful when testing the secondary Learning records interface; its navigation must be adapted to enter that view first. It also expects a fresh empty store.
 
 ## Host bundles
 
@@ -59,7 +58,7 @@ Use an existing Hermes checkout and its Python environment:
 /path/to/hermes-agent/.venv/bin/python -B dev/hermes.py serve --source /path/to/hermes-agent --home /tmp/hermes-learning-host --port 8878
 ```
 
-These commands stage a copy in a fresh owned home. The dashboard tab is `/learning`, the plugin ID is `hermes-learning`, and the legacy tracked-chat command is `/learning-track`. The integrated workspace requires no copied command or main-chat handoff.
+These commands stage a copy in a fresh owned home. The dashboard tab is `/learning` and the plugin ID is `hermes-learning`. The workspace is the only learning entrypoint; the retired tracked-chat command is no longer registered.
 
 A remote Desktop frontend needs both its local frontend installation and the compatible agent component on the connected backend/profile. Backend installation alone does not install the native frontend. The native loader expects `<local HERMES_HOME>/desktop-plugins/hermes-learning/plugin.js`; the tested unified installer discovers `desktop/plugin.js` and copies it there. Enablement is under **Capabilities → Plugins → Desktop** in the tested host.
 
@@ -97,3 +96,5 @@ Backend tests cover course job authorization/idempotency, publication and source
 With a fresh empty local preview store, run `dev/check-rendering.mjs` using the same `LEARNING_PREVIEW_URL`, `PLAYWRIGHT_MODULE`, `CHROME_PATH`, and optional sandbox settings as the integration check. It refuses nonempty stores and requires the simulated-preview label. It creates three synthetic lessons to verify highlighted code and clipboard text, GFM content and footnote return links, all visual types and keyboard stepping, and light desktop/dark mobile layouts. Screenshots default to `/tmp/hermes-learning-rendering-check`; override with `LEARNING_SCREENSHOT_DIR`. No model runs or real-host data changes are involved.
 
 Production UI bundles include pinned Markdown and syntax-highlighting dependencies. `npm --prefix ui run build` regenerates `THIRD_PARTY_NOTICES.md`, which is included in the release-file list.
+
+For explicit removal of the old experience's data, use [the legacy cleanup procedure](../docs/data-and-recovery.md). Test it only against disposable stores during development. The browser check also verifies that records navigation is absent and old client drafts are discarded.

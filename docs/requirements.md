@@ -1,5 +1,7 @@
 # Draft requirements
 
+> Historical design: the legacy records interface, manual approvals and chat-command flow are retired. Current behavior is documented in [Learner flows](user-flows.md). Old records are discarded rather than migrated.
+
 Status: revised draft for user review. Documentation changes do not authorize product implementation, plugin installation, or service restarts. Agreed product scope is preserved; detailed policies below require review.
 
 ## Goal and scope

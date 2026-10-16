@@ -10,9 +10,8 @@ A personal learning workspace for [Hermes Agent](https://github.com/NousResearch
 - **Bring your own material.** Attach multiple text, Markdown, or code files, paste notes, or add source and repository links. Each source shows whether its text is available or retrieval failed.
 - **Read and ask in one place.** Follow lessons with formatted Markdown, tables, highlighted code you can copy, and step-by-step sequence diagrams, state machines, or code traces. Ask for a simpler explanation or another example beside the lesson.
 - **Continue later.** Reopen your last lesson and its tutor conversation. Generate later lessons when you select them.
-- **Keep your existing records.** Saved activities, answers, assessments, reviews, and detailed progress remain available under Learning records.
 
-The tutor uses your configured Hermes model and credentials. Generating a path saves your request and supplied material and sends shared material to that model. Opening Learning alone does not start a model turn. Reading progress is separate from assessed practice; an ordinary tutor question is not a graded attempt.
+The tutor uses your configured Hermes model and credentials. Generating a path saves your request and supplied material and sends shared material to that model. Opening Learning alone does not start a model turn. Read markers help you return to a lesson; practice and questions stay in the tutor conversation.
 
 ## Install
 
@@ -30,7 +29,7 @@ For a remote backend, install there too, then restart its dashboard/API server:
 hermes plugins install https://github.com/irfansofyana/hermes-learning --enable
 ```
 
-Open Learning and enter a topic or project. Desktop and web use the same saved work when connected to the same backend and profile. `/learning-track` remains available for explicitly tracked study in chat.
+Open Learning and enter a topic or project. Desktop and web use the same saved work when connected to the same backend and profile.
 
 ## Status
 

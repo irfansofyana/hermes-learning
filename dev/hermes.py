@@ -64,12 +64,6 @@ def worker(action, args):
     elif action == "tool":
         from tools.registry import registry
         print(registry.dispatch(args[0], json.loads(args[1]), scope=pm.scope_key))
-    elif action == "command":
-        # Exercise the actual registered command handler, never a model enrollment tool.
-        command = pm._plugin_commands.get("learning-track")
-        if not command:
-            raise RuntimeError("Learning command was not registered")
-        print(command["handler"](args[0]))
     elif action == "inspect":
         skills = pm.list_plugin_skills(PLUGIN_ID)
         from tools.skills_tool import skill_view
@@ -87,7 +81,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == "_worker":
         return worker(sys.argv[2], sys.argv[3:])
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "serve", "tool", "command", "inspect"])
+    parser.add_argument("action", choices=["prepare", "serve", "tool", "inspect"])
     parser.add_argument("arguments", nargs="*")
     parser.add_argument("--home", type=Path, default=Path("/tmp/hermes-learning-runtime"))
     parser.add_argument("--source", type=Path)

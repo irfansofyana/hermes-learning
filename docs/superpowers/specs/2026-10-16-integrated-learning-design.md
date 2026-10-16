@@ -1,5 +1,7 @@
 # Integrated Learning rebuild
 
+> Historical design: the legacy records interface, manual approvals and chat-command flow are retired. Current behavior is documented in [Learner flows](../../user-flows.md). Old records are discarded rather than migrated.
+
 Status: proposed for review. Implementation will happen on `main`, as requested.
 
 ## Product intent

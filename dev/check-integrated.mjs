@@ -10,7 +10,10 @@ const browser=await chromium.launch({...(process.env.CHROME_PATH?{executablePath
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 const errors=[];page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
 try{
+await page.addInitScript(()=>{localStorage.setItem('hermes-learning:draft:v1:old:track:activity','old answer');sessionStorage.setItem('hermes-learning:context','old context');sessionStorage.setItem('hermes-learning:tutor-request','old handoff');localStorage.setItem('learning-qa:keep','unrelated state');});
 await page.goto(url);await page.getByRole('heading',{name:'What do you want to learn or build?'}).waitFor();
+assert.deepEqual(await page.evaluate(()=>[localStorage.getItem('hermes-learning:draft:v1:old:track:activity'),sessionStorage.getItem('hermes-learning:context'),sessionStorage.getItem('hermes-learning:tutor-request'),localStorage.getItem('learning-qa:keep')]),[null,null,null,'unrelated state']);
+assert.equal(await page.getByRole('button',{name:/learning records/i}).count(),0,'The retired records app must not be reachable');
 await page.screenshot({path:resolve(output,'home-desktop.png')});
 const title='Build a job queue in Go — browser integration '+Date.now();
 await page.getByLabel('What do you want to learn or build?').fill(title);
@@ -21,6 +24,7 @@ await page.getByText('Link · not read',{exact:true}).waitFor();
 await page.getByRole('button',{name:'Generate learning path',exact:true}).click();
 await page.getByRole('heading',{name:'Understand the moving parts',exact:true}).waitFor({timeout:15000});
 await page.getByText('A queue holds tasks in the order they arrive.',{exact:false}).waitFor();
+assert.equal(await page.getByRole('button',{name:/learning records|continue in chat|prepare a tutor request/i}).count(),0,'Lessons must stay in the embedded tutor flow');
 await page.screenshot({path:resolve(output,'lesson-desktop.png')});
 assert.equal(await page.locator('.lw-source-list .has-error').count(),1);
 await page.getByRole('button',{name:'Explain simply',exact:true}).click();

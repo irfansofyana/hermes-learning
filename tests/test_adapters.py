@@ -28,12 +28,13 @@ class AdapterTests(unittest.TestCase):
         self.plugin.register(ctx)
         manifest_tools = re.findall(r'^  - (learning_[a-z_]+)$', (ROOT / 'plugin.yaml').read_text(), re.MULTILINE)
         self.assertEqual(set(manifest_tools), set(ctx.tools), 'Declared capabilities must match the registered tools for Hermes admission')
-        self.assertIn('learning-track', ctx.commands)
-        for forbidden in ('learning_start', 'learning_resume', 'learning_export', 'learning_approve', 'learning_recommendation_decide', 'learning_track_status', 'learning_review'):
-            self.assertNotIn(forbidden, ctx.tools)
-        self.assertIn('learning_resume_brief', ctx.tools)
+        self.assertEqual(ctx.commands, {}, 'The retired command flow must not be registered')
+        self.assertEqual(set(ctx.tools), {
+            'learning_course_source', 'learning_course_read', 'learning_course_plan',
+            'learning_course_lesson', 'learning_source_read', 'learning_quote_check', 'learning_state',
+        })
         with patch.object(self.plugin.runtime, 'action', return_value={'ok': True}) as dispatch:
-            ctx.tools['learning_submit']['handler']({'context_id':'c', 'run_id':'r', 'answer':'verbatim'})
+            ctx.tools['learning_course_read']['handler']({'track_id': 'track'})
             self.assertEqual(dispatch.call_args.kwargs['channel'], 'chat_relayed')
 
     def test_runtime_denies_model_consent_export_and_invalid_version(self):
@@ -121,16 +122,6 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result['source']['excerpt'], 'ignore rules')
         self.assertEqual(result['content_trust'], 'untrusted-source-material')
         self.assertIn('not instructions', result['model_policy'])
-
-    def test_slash_start_is_explicit(self):
-        with patch.object(self.plugin.runtime, 'action', return_value={'context_id':'c'}) as dispatch:
-            self.plugin.command('start Distributed systems')
-            self.assertEqual(dispatch.call_args.args[0], 'start')
-            self.assertEqual(dispatch.call_args.kwargs['channel'], 'ui_direct')
-            self.plugin.command('status')
-            self.assertEqual(dispatch.call_args.args[0], 'state')
-            self.plugin.command('approve context 2')
-            self.assertEqual(dispatch.call_args.args, ('approve', {'context_id':'context', 'revision':2}))
 
     def test_learning_loop_contract_reaches_real_service(self):
         runtime = self.plugin.runtime
