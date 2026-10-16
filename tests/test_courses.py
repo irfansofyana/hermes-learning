@@ -61,6 +61,19 @@ class CourseTests(unittest.TestCase):
         self.assertEqual(view['position'], {'lesson_key':'first', 'completed':[]})
         self.assertNotIn(start['context_id'], json.dumps(view))
 
+    def test_opaque_citations_are_rejected_without_closing_job_and_markdown_retry_saves(self):
+        start = self.start()
+        self.plan(start)
+        for marker in ['\ue200cite\ue202turn1view0\ue201', '\ue200cite\ue202turn0search2']:
+            with self.subTest(marker=marker), self.assertRaisesRegex(runtime.LearningError, 'Markdown.*URL'):
+                self.lesson(start, content='Kafka retains events. ' + marker)
+        self.assertEqual(self.read(start)['lessons'], [])
+        self.assertEqual(self.read(start)['jobs'][0]['status'], 'generating')
+        content = 'Kafka retains events. [Apache Kafka introduction](https://kafka.apache.org/intro/)'
+        saved = self.lesson(start, content=content)
+        self.assertEqual(saved['lesson']['content'], content)
+        self.assertEqual(self.read(start)['jobs'][0]['status'], 'completed')
+
     def test_chat_cannot_authorize_or_bind_and_other_contexts_cannot_publish(self):
         start = self.start()
         for action, params in [('course_start', {'request_id':'x','title':'X','intent':'topic','level':'beginner','materials':[]}), ('course_open', {'track_id':start['track_id']}), ('course_generate', {'context_id':start['context_id'],'request_id':'x'}), ('course_bind', {'context_id':start['context_id'],'session_id':'s','scope':'backend/profile/store'}), ('course_position', {'context_id':start['context_id'],'lesson_key':'first'}), ('course_job_status', {'context_id':start['context_id'],'job_id':start['job_id'],'status':'failed'})]:

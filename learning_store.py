@@ -690,7 +690,10 @@ class Store:
                     fail('Model cannot author from a metadata-only source', 'source_restricted', 403)
                 if not source['excerpt'].strip():
                     fail('An unread reference cannot be cited as source material', 'source_unread', 409)
-            publication = {'key': key, 'title': item['title'], 'content': text(p.get('content'), 'lesson content', 50000, True),
+            content = text(p.get('content'), 'lesson content', 50000, True)
+            if '\ue200cite' in content:
+                fail('Use Markdown source links with the actual URL, not internal citation markers. Correct the content and retry this same job.', 'invalid_citation')
+            publication = {'key': key, 'title': item['title'], 'content': content,
                            'source_ids': source_ids, 'visual': self._visual(p.get('visual'))}
             digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
             if job.get('lesson_hash'):

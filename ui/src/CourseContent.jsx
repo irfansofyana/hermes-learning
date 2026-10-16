@@ -6,11 +6,12 @@ export function safeCourseURL(value){
 }
 function Inline({text}){
  // React escapes every source token. Raw HTML, images, and executable URLs are never interpreted.
- const parts=String(text).split(/(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*|\[[^\]\n]+\]\([^\s)]+\))/g);
+ const parts=String(text).split(/(\uE200cite\uE202[^\uE201\r\n]*\uE201|`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*|\[[^\]\n]+\]\([^\s)]+\))/g);
  return parts.map((part,i)=>{
+  if(part.startsWith('\uE200cite\uE202'))return <span key={i} className="lw-citation-unavailable" title="The tutor saved this citation without its source URL.">[Source link unavailable]</span>;
   if(part.startsWith('`')&&part.endsWith('`'))return <code key={i}>{part.slice(1,-1)}</code>;
-  if(part.startsWith('**')&&part.endsWith('**'))return <strong key={i}>{part.slice(2,-2)}</strong>;
-  if(part.startsWith('*')&&part.endsWith('*'))return <em key={i}>{part.slice(1,-1)}</em>;
+  if(part.startsWith('**')&&part.endsWith('**'))return <strong key={i}><Inline text={part.slice(2,-2)}/></strong>;
+  if(part.startsWith('*')&&part.endsWith('*'))return <em key={i}><Inline text={part.slice(1,-1)}/></em>;
   const link=part.match(/^\[([^\]]+)\]\(([^)]+)\)$/),href=link&&safeCourseURL(link[2]);
   if(href)return <a key={i} href={href} target="_blank" rel="noopener noreferrer">{link[1]}</a>;
   return part;
