@@ -117,7 +117,7 @@ def main():
         os.chdir(env["HOME"])
         os.execve(str(python), cmd + ["serve", str(options.port)], env)
     else:
-        expected = {"tool": 2, "command": 1, "inspect": 0}[options.action]
+        expected = {"tool": 2, "inspect": 0}[options.action]
         if len(options.arguments) != expected:
             parser.error(f"{options.action} expects {expected} arguments")
         subprocess.run(cmd + [options.action] + options.arguments, env=env, check=True, cwd=env["HOME"])

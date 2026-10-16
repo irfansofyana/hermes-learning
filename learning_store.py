@@ -22,7 +22,7 @@ OUTCOMES = ['needs-work', 'developing', 'demonstrated']
 CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1']
 WITHHELD = 'Content withheld by source-sharing policy.'
 READS = {'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
-WRITES = {'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
+WRITES = {'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
 KINDS = ('track', 'source', 'activity', 'attempt', 'assessment', 'review', 'dispute', 'help', 'run', 'context', 'recommendation')
 
 
@@ -482,9 +482,167 @@ class Store:
         records = self._all(db, 'course', tid)
         return records[0] if records else None
 
+    def _course_proposal_view(self, db, proposal, channel):
+        view = {key: value for key, value in proposal.items() if key not in ('context_id', 'request_hash')}
+        # A private source may influence the summary and roadmap as well as the
+        # lesson body; withhold the whole content-bearing projection together.
+        if channel == 'chat_relayed' and any(
+                self._get(db, 'source', sid, proposal['track_id'])['sharing'] == 'metadata-only'
+                for lesson in proposal['lessons'] for sid in lesson['source_ids']):
+            view.update(summary=WITHHELD, outline=[], lessons=[], content_withheld=True)
+        return view
+
+    def _course_outline(self, outline):
+        if not isinstance(outline, list) or not 1 <= len(outline) <= 50:
+            fail('An outline requires 1–50 lessons')
+        cleaned, seen = [], set()
+        for item in outline:
+            if not isinstance(item, dict) or set(item) != {'key', 'title', 'goal'}:
+                fail('Outline entries require key, title and goal')
+            key = text(item['key'], 'lesson key', 80, True)
+            if not all(c.isascii() and (c.isalnum() or c in '_-') for c in key) or key in seen:
+                fail('Lesson keys must be unique ASCII letters, numbers, underscores or hyphens')
+            seen.add(key)
+            cleaned.append({'key': key, 'title': text(item['title'], 'lesson title', 300, True),
+                            'goal': text(item['goal'], 'lesson goal', 2000, True)})
+        return cleaned
+
+    def _course_proposed_lessons(self, db, tid, lessons, outline, channel):
+        if not isinstance(lessons, list) or len(lessons) > 50:
+            fail('Provide at most 50 lesson updates')
+        titles = {item['key']: item['title'] for item in outline}
+        cleaned, seen = [], set()
+        for lesson in lessons:
+            if not isinstance(lesson, dict) or set(lesson) - {'lesson_key', 'content', 'source_ids', 'visual'}:
+                fail('Unsupported proposed lesson fields')
+            key = text(lesson.get('lesson_key'), 'lesson_key', 80, True)
+            if key not in titles or key in seen:
+                fail('Proposed lessons must have unique keys in the proposed outline')
+            seen.add(key)
+            source_ids = strings(lesson.get('source_ids'), 'source_ids', 30, 100)
+            if len(set(source_ids)) != len(source_ids):
+                fail('Source references must be unique')
+            for sid in source_ids:
+                source = self._get(db, 'source', sid, tid)
+                if channel == 'chat_relayed' and source['sharing'] == 'metadata-only':
+                    fail('Model cannot author from a metadata-only source', 'source_restricted', 403)
+                if not source['excerpt'].strip():
+                    fail('An unread reference cannot be cited as source material', 'source_unread', 409)
+            content = text(lesson.get('content'), 'lesson content', 50000, True)
+            if '\ue200cite' in content:
+                fail('Use Markdown source links with actual URLs, not internal citation markers.', 'invalid_citation')
+            cleaned.append({'lesson_key': key, 'title': titles[key], 'content': content,
+                            'source_ids': source_ids, 'visual': self._lesson_visual(lesson.get('visual'))})
+        return cleaned
+
+    def _course_update(self, db, action, p, channel, context, track, course, now):
+        tid, revision = track['id'], course.get('revision', 1)
+        proposals = self._all(db, 'course_proposal', tid)
+        if action == 'course_propose':
+            request_id = text(p.get('request_id'), 'request_id', 100, True)
+            # Hash the submitted request, not the current course: delivery retries
+            # remain stable after acceptance or another course update.
+            request = {key: value for key, value in p.items() if key != 'context_id'}
+            digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            existing = next((item for item in proposals if item['request_id'] == request_id), None)
+            if existing:
+                if existing['request_hash'] != digest:
+                    fail('Request ID already used with different input', 'idempotency_conflict', 409)
+                return {'proposal': self._course_proposal_view(db, existing, channel), 'revision': revision}
+        else:
+            proposal = self._get(db, 'course_proposal', p.get('proposal_id'), tid)
+            if action == 'course_dismiss':
+                if proposal['status'] == 'applied':
+                    fail('An applied proposal cannot be dismissed', 'proposal_closed', 409)
+                if proposal['status'] != 'dismissed':
+                    proposal.update(status='dismissed', updated_at=now)
+                    self._put(db, 'course_proposal', proposal, True)
+                return {'proposal': self._course_proposal_view(db, proposal, channel), 'revision': revision}
+            if proposal['status'] == 'applied':
+                return {'proposal': self._course_proposal_view(db, proposal, channel), 'revision': proposal['applied_revision']}
+            if proposal['base_revision'] != revision or proposal['status'] == 'stale':
+                fail('Course changed. Review a new proposal before applying.', 'revision_conflict', 409)
+            if proposal['status'] != 'pending':
+                fail('Proposal is no longer pending', 'proposal_closed', 409)
+        if any(job['status'] in ('queued', 'generating') for job in self._all(db, 'course_job', tid)):
+            fail('Finish or stop current generation before changing the course.', 'generation_busy', 409)
+        if action == 'course_propose':
+            base = p.get('base_revision')
+            if type(base) is not int or base < 1:
+                fail('base_revision must be a positive integer')
+            if base != revision:
+                fail('Course changed. Reload before proposing changes.', 'revision_conflict', 409)
+            mode = p.get('mode')
+            if mode not in ('revise', 'extend', 'regenerate'):
+                fail('Unsupported proposal mode')
+            summary = text(p.get('summary'), 'summary', 12000, True)
+            outline = self._course_outline(p.get('outline', course['outline']))
+            lessons = self._course_proposed_lessons(db, tid, p.get('lessons', []), outline, channel)
+            if mode == 'extend':
+                prefix = course['outline']
+                if len(outline) <= len(prefix) or outline[:len(prefix)] != prefix:
+                    fail('Extend requires the unchanged existing outline followed by new lessons')
+                if {item['lesson_key'] for item in lessons} & {item['key'] for item in prefix}:
+                    fail('Extend may supply only new lessons')
+            if mode == 'regenerate' and ('outline' not in p or outline[0]['key'] not in {item['lesson_key'] for item in lessons}):
+                fail('Regenerate requires a complete outline and its complete first lesson')
+            current = {item['key']: self._lesson_view(item) for item in self._all(db, 'lesson', tid)}
+            changed = outline != course['outline'] or any(
+                item['lesson_key'] not in current or
+                any(item[field] != current[item['lesson_key']].get(field) for field in ('title', 'content', 'source_ids', 'visual'))
+                for item in lessons)
+            if mode == 'regenerate' and set(current) - {item['lesson_key'] for item in lessons}:
+                changed = True
+            if not changed:
+                fail('A proposal must contain an actual roadmap or lesson change')
+            if sum(item['status'] == 'pending' for item in proposals) >= 5:
+                fail('Review or dismiss existing pending proposals first.', 'proposal_limit', 409)
+            proposal = self._new(track_id=tid, context_id=context['id'], request_id=request_id, request_hash=digest,
+                                 base_revision=base, mode=mode, summary=summary, outline=outline, lessons=lessons,
+                                 status='pending', created_at=now, updated_at=now)
+            self._put(db, 'course_proposal', proposal)
+            return {'proposal': self._course_proposal_view(db, proposal, channel), 'revision': revision}
+
+        # Acceptance is guarded and serialized by dispatch's BEGIN IMMEDIATE.
+        old = {item['key']: item for item in self._all(db, 'lesson', tid)}
+        replacements = {item['lesson_key']: item for item in proposal['lessons']}
+        titles = {item['key']: item['title'] for item in proposal['outline']}
+        keep_keys = set(titles)
+        regenerate = proposal['mode'] == 'regenerate'
+        for key, lesson in old.items():
+            if regenerate or key not in keep_keys or key in replacements:
+                db.execute('DELETE FROM records WHERE id=? AND kind=? AND track_id=?', (lesson['id'], 'lesson', tid))
+            elif lesson['title'] != titles[key]:
+                # A roadmap rename changes display metadata, not the lesson
+                # body or its read progress. Goals remain owned by the outline.
+                lesson['title'] = titles[key]
+                self._put(db, 'lesson', lesson, True)
+        for key, supplied in replacements.items():
+            publication = {name: value for name, value in supplied.items() if name != 'lesson_key'}
+            lesson = self._new(track_id=tid, key=key, **publication,
+                               version=old[key].get('version', 1) + 1 if key in old and not regenerate else 1,
+                               proposal_id=proposal['id'], created_at=now)
+            self._put(db, 'lesson', lesson)
+        available = set(replacements) | (set() if regenerate else set(old) & keep_keys)
+        position = course['position']
+        selected = None if regenerate else position['lesson_key']
+        if selected not in available:
+            selected = next((item['key'] for item in proposal['outline'] if item['key'] in available), None)
+        completed = [] if regenerate else [key for key in position['completed'] if key in available and key not in replacements]
+        course.update(outline=proposal['outline'], revision=revision + 1,
+                      position={'lesson_key': selected, 'completed': completed}, updated_at=now)
+        self._put(db, 'course', course, True)
+        proposal.update(status='applied', applied_revision=revision + 1, updated_at=now)
+        self._put(db, 'course_proposal', proposal, True)
+        for other in proposals:
+            if other['id'] != proposal['id'] and other['status'] == 'pending':
+                other.update(status='stale', updated_at=now)
+                self._put(db, 'course_proposal', other, True)
+        return {'proposal': self._course_proposal_view(db, proposal, channel), 'revision': revision + 1}
+
     def _course_dispatch(self, db, action, p, channel):
         now = iso(self.clock())
-        ui_actions = {'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
+        ui_actions = {'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
         if action in ui_actions and channel != 'ui_direct':
             fail('This course action requires the human workspace', 'explicit_entry_required', 403)
         if action == 'course_read':
@@ -496,6 +654,8 @@ class Store:
                 if channel == 'chat_relayed' and any(self._get(db, 'source', sid, tid)['sharing'] == 'metadata-only' for sid in lesson['source_ids']):
                     lesson.update(content=WITHHELD, title='Lesson with restricted source', visual=None, content_withheld=True)
             return {'track': self._track_view(track), 'outline': course.get('outline', []),
+                    'revision': course.get('revision', 1),
+                    'proposals': [self._course_proposal_view(db, item, channel) for item in self._all(db, 'course_proposal', tid)],
                     'lessons': lessons, 'position': course.get('position', {'lesson_key': None, 'completed': []}),
                     'binding': course.get('binding') if channel == 'ui_direct' else None,
                     'jobs': [self._course_job_view(job) for job in self._all(db, 'course_job', tid)],
@@ -568,6 +728,8 @@ class Store:
             course = self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None,
                                position={'lesson_key': None, 'completed': []}, created_at=now)
             self._put(db, 'course', course)
+        if action in ('course_propose', 'course_apply', 'course_dismiss'):
+            return self._course_update(db, action, p, channel, context, track, course, now)
         if action == 'course_generate':
             request_id = text(p.get('request_id'), 'request_id', 100, True)
             lesson_key = p.get('lesson_key')
@@ -647,6 +809,8 @@ class Store:
             job.update(status=status, error=text(p.get('error', ''), 'error', 2000), updated_at=now)
             self._put(db, 'course_job', job, True)
             return self._course_job_view(job)
+        if action in ('course_plan', 'course_lesson') and job.get('base_revision', 1) != course.get('revision', 1):
+            fail('Course changed since this generation request; reload before publishing.', 'revision_conflict', 409)
         if action == 'course_plan':
             if not job['allow_outline']:
                 fail('This generation request does not authorize a new outline', 'job_scope', 403)
@@ -731,6 +895,7 @@ class Store:
         course = self._course_data(db, track['id'])
         outline = course['outline'] if course else []
         job = self._new(track_id=track['id'], context_id=context_id, request_id=request_id,
+                        base_revision=course.get('revision', 1) if course else 1,
                         requested_lesson_key=lesson_key, lesson_key=lesson_key or (outline[0]['key'] if outline else None),
                         allow_outline=lesson_key is None and not outline, status='queued', error='', created_at=now, updated_at=now)
         self._put(db, 'course_job', job)

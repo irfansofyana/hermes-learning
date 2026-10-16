@@ -4,7 +4,7 @@ Use Node.js 22+ and Python 3.11+. The backend uses Hermes's FastAPI/Pydantic run
 
 ## Local preview
 
-The preview serves the shared UI against the real Learning store through a Python standard-library HTTP adapter. Its tutor transport is deliberately simulated and visibly labelled. Generate creates synthetic outline/lesson content through the real course actions; chat replies are deterministic. No model call, repository fetch, or real Hermes session occurs.
+The preview serves the shared UI against the real Learning store through a Python standard-library HTTP adapter. Its tutor transport is deliberately simulated and visibly labelled. Generate creates synthetic outline/lesson content through the real course actions; chat replies are deterministic. Explicit rewrite, roadmap, extension and regeneration requests create synthetic proposals through `course_propose`; **Apply changes** and dismiss exercise the real human-only actions. Proposal content is simulated, not a model-quality result. No model call, repository fetch, or real Hermes session occurs.
 
 ```sh
 npm --prefix ui install
@@ -35,6 +35,14 @@ node dev/check-integrated.mjs
 
 Omit `PLAYWRIGHT_MODULE` to resolve `playwright` normally and `CHROME_PATH` to use Playwright's installed Chromium. Screenshots default to `/tmp/hermes-learning-integrated-check`; override with `LEARNING_SCREENSHOT_DIR`. Restricted environments may need loopback/browser permission. `LEARNING_BROWSER_NO_SANDBOX=1` is an explicit opt-in for disposable containers that cannot use Chromium's sandbox.
 
+
+## Course update checks
+
+Use a disposable preview store to exercise lesson rewrites and roadmap changes (`revise`), added lessons (`extend`), and replacement paths (`regenerate`). Check the proposal summary, roadmap differences, lesson content and read-progress impact before applying. Dismiss a proposal, reload with another pending proposal, and attempt to apply one whose base revision is stale. Failure must leave current content unchanged. Confirm that unchanged rich lessons and their read markers survive revision/extension, modified lessons become unread, regeneration resets position/progress, and sources plus the tutor binding survive every mode.
+
+Generation must finish or stop before proposal/apply. Also check a failed generation, then a requested edit, and confirm that retrying publication from an older completed job cannot restore obsolete lessons. Ordinary explanation/example questions must not create proposals. Use model `learning_course_propose` only for preparing changes and UI-only `course_apply`/`course_dismiss` for decisions. The model has no apply tool.
+
+Repeat the relevant flow against actual isolated Hermes and Desktop with the configured model, including reload and failed/stale operations, before claiming live-host update support. Do not use the learner's live courses as fixtures. Record observed results and boundaries in [compatibility](../docs/compatibility.md); the preview, unit tests and production build establish separate evidence.
 
 ## Host bundles
 
@@ -87,7 +95,7 @@ python3 -B dev/evaluate.py
 node spikes/001-cross-client-learning/tests/check_recovery.cjs
 ```
 
-Backend tests cover course job authorization/idempotency, publication and source boundaries, legacy evidence, context revocation, concurrent startup, and restoration. UI unit tests cover input limits, inert Markdown rendering, host transport lifecycle, session identity/history, permission handling, interruption, and uncertain delivery without replay. Preview HTTP tests cover authentication, origin/Host checks, action envelopes, routes, and static path restrictions.
+Backend tests cover course revisions, proposal authorization/idempotency and stale application, course job authorization/idempotency, publication and source boundaries, legacy evidence, context revocation, concurrent startup, and restoration. UI unit tests cover input limits, inert Markdown rendering, host transport lifecycle, session identity/history, permission handling, interruption, and uncertain delivery without replay. Preview HTTP tests cover authentication, origin/Host checks, action envelopes, routes, and static path restrictions.
 
 `dev/evaluate.py` checks deterministic tool/record scenarios, not teaching quality. Live-model evaluation and its limits are documented in [the evaluation guide](../docs/evaluations/tutoring.md). Keep simulated UI checks, real-host integration, and model-quality evidence distinct when reporting results.
 
@@ -98,3 +106,5 @@ With a fresh empty local preview store, run `dev/check-rendering.mjs` using the 
 Production UI bundles include pinned Markdown and syntax-highlighting dependencies. `npm --prefix ui run build` regenerates `THIRD_PARTY_NOTICES.md`, which is included in the release-file list.
 
 For explicit removal of the old experience's data, use [the legacy cleanup procedure](../docs/data-and-recovery.md). Test it only against disposable stores during development. The browser check also verifies that records navigation is absent and old client drafts are discarded.
+
+`dev/check-updates.mjs` checks conversational lesson rewrites, extension, regeneration, review/apply/dismiss, pending-proposal reload, and read-progress/conversation preservation in the simulated preview. Use the same Playwright environment settings as the other browser checks and an isolated disposable store; it creates one new path. Screenshots default to `/tmp/hermes-learning-updates-check`.

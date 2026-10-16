@@ -4,6 +4,7 @@ description: "Turn topics, projects, and your own sources into lessons with a tu
 provides_tools:
   - learning_course_source
   - learning_course_read
+  - learning_course_propose
   - learning_course_plan
   - learning_course_lesson
   - learning_source_read

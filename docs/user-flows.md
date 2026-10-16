@@ -12,7 +12,7 @@ Learning starts with a useful lesson. The tutor lives beside it, using the confi
 
 A source-only request is supported. If there is neither a topic nor usable material or a source link, the input stays in place and the UI explains what is missing. PDF and image import are not supported. Source text is material to study, not code to execute.
 
-The tutor chooses reasonable starting assumptions and displays them with the lesson. **Adjust assumptions** prepares a message to the tutor; it does not directly rewrite the saved outline. Project paths use milestones and concrete deliverables. Suggested commands and expected results must be distinguished from work actually run.
+The tutor chooses reasonable starting assumptions and displays them with the lesson. **Adjust assumptions** prepares a message to the tutor. The tutor can propose an update for review; the saved path changes only after **Apply changes**. Project paths use milestones and concrete deliverables. Suggested commands and expected results must be distinguished from work actually run.
 
 ## Read, ask, and continue
 
@@ -25,6 +25,16 @@ The tutor chooses reasonable starting assumptions and displays them with the les
 Desktop shows the path, lesson, and collapsible tutor together. On narrow screens, Path, Lesson, and Tutor tabs switch panels while preserving the draft and panel scroll state. The interface follows the host/system theme, with a theme control in its header.
 
 Tutor requests use the configured Hermes session. Required tool permissions and clarifications appear in the tutor panel and wait for the learner's response; they are never silently approved.
+
+## Change a lesson or roadmap
+
+Ask the embedded tutor directly: “Rewrite this lesson with a simpler example,” “Adjust the upcoming roadmap for my project,” “Add lessons about deployment,” or “Regenerate this path for an intermediate learner.” The edit controls prepare requests in the same tutor. There are no copied commands, separate interviews or records pages.
+
+The tutor prepares a proposal. Review its summary, roadmap differences, changed or new lesson content, and effect on read markers. Choose **Apply changes** to save it, or dismiss it to keep the current path. A proposal alone does not change the saved lesson or outline. Ordinary questions such as “Explain this more simply” receive a chat answer without changing the path.
+
+Rewriting lessons preserves untouched lessons and their read markers; changed lessons become unread and removed lessons leave the path. Extending a path keeps all existing lessons and progress. Regenerating replaces the lessons and resets reading progress to the new first lesson. All three keep the supplied sources and tutor conversation.
+
+Pending proposals return after reload. If the path changed after a proposal was prepared, applying it reports a conflict and leaves the current path intact; request a fresh proposal against the updated path. Applying one proposal makes other pending proposals stale. Finish or stop active lesson generation before proposing or applying an update. A failed operation keeps the current saved content and shows the error.
 
 ## Return to saved work
 
@@ -56,6 +66,9 @@ Educational chat outside Learning remains ordinary chat. Open Learning to create
 | Simpler explanation or example | A response appears in the embedded tutor, without a chat handoff |
 | Reload and Continue | Last published reading position and the correct conversation return without a new prompt |
 | Stop, failed publication, or lost acknowledgement | Saved results survive; retry/reconnect is explicit and uncertain prompts are not automatically replayed |
+| Rewrite, roadmap revision, extension, or regeneration | Summary and preview appear; only Apply changes updates the saved course |
+| Dismiss or reload a proposal | Dismiss preserves current content; reload restores pending proposals |
+| Stale proposal or failed update | Error is visible and current lessons remain intact |
 | Backend/profile change | Old events and drafts cannot attach to another store or path |
 | Reading and ordinary tutor chat | No automatic assessment, mastery claim, or practice attempt |
 

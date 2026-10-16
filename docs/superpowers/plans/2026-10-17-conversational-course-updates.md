@@ -1,0 +1,17 @@
+# Conversational course updates
+
+The learner should be able to ask the embedded tutor to rewrite a lesson, change the upcoming roadmap, extend it, or regenerate it. No copied commands, discovery interview, or legacy records app. Existing product authorization covers implementation on main.
+
+## Contract
+
+- `course_read` adds `revision` (default 1 for existing courses) and `proposals`.
+- New model tool `learning_course_propose`: `context_id`, stable `request_id`, `base_revision`, `mode` (`revise`, `extend`, `regenerate`), `summary`, optional full `outline` [{key,title,goal}], optional `lessons` [{lesson_key,content,source_ids,visual?}]. At least one actual change. Omitted outline uses existing. Lesson titles derive from proposed outline. Standard source/citation/visual bounds apply. Revise preserves unchanged lessons, removes lessons omitted from an explicitly supplied outline, and supports adding/reordering lessons. Extend requires the existing outline as an identical prefix and at least one new entry; only new lessons may be supplied. Regenerate requires an explicit new outline and complete first lesson; no old lessons are retained. No writes to visible course until accepted.
+- `course_apply` and `course_dismiss`: human UI-only, context_id and proposal_id. Apply is atomic and idempotent. Stale base revisions conflict. Existing concurrent generation must finish/stop before proposal/apply. Changing a course invalidates other pending proposals; completed job publication retries must not restore obsolete content.
+- Proposal scope is the active track; reject cross-track IDs, revoked contexts, restricted/unread source references and invalid content. Cap pending proposals and bound payloads. Read projections must not expose context capabilities or restricted lesson content to model channels.
+- Store current lessons only: revise retains untouched lesson records and read markers, replaces specified lesson records with incremented version and clears their read markers, drops removed lessons/read markers, preserves a valid selected position. Regenerate replaces lessons, resets read markers/position to its new first lesson. Extend keeps all old lessons and progress. Sources and tutor binding remain. Course revision increments on every applied proposal. API/schema stay v1 with additive records.
+- Tutor prompts carry authoritative current revision and selected lesson; ordinary conversation can propose changes only when requested, never silently apply. Preview transport simulates each proposal kind and is clearly labelled.
+- Tutor shows pending proposal summary and a focused review: roadmap differences, changed/new lesson content, read-progress impact. Apply/dismiss inside plugin. Stale/failing operations keep current content and report error; reload restores pending proposals. Quick controls help request edits through the same tutor.
+
+## Work and verification
+
+Backend worker owns service/schema/registration/tests. Primary owns tutor prompt/UI/preview/browser checks and docs. First add failing contract tests, implement, run unit suites and production build, exercise revise/extend/regenerate, dismissal, reload, stale conflict, failed generation and rich-content preservation in disposable preview and actual isolated Hermes/Desktop. Review independently, commit/push main, update VPS plugin and restart dashboard when idle. Do not alter user's live courses to test updates.

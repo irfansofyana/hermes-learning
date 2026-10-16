@@ -84,7 +84,11 @@ SPECS['activity_revision'] = ({**SPECS['activity'][0], 'activity_id': ID}, [*SPE
 
 MATERIAL = object_schema({'title': string(300), 'kind': string(100), 'url': string(2000, 0), 'locator': string(2000, 0), 'excerpt': string(50000, 0), 'sharing': enum('metadata-only', 'selected-excerpts', 'full-text')}, ['title', 'kind', 'sharing'])
 LESSON_OUTLINE = object_schema({'key': string(80), 'title': string(300), 'goal': string(2000)}, ['key', 'title', 'goal'])
+PROPOSED_LESSON = object_schema({'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL}, ['lesson_key', 'content', 'source_ids'])
 SPECS.update({
+    'course_propose': ({**CONTEXT, 'request_id': ID, 'base_revision': {'type': 'integer', 'minimum': 1}, 'mode': enum('revise', 'extend', 'regenerate'), 'summary': string(12000), 'outline': array(LESSON_OUTLINE, 50), 'lessons': array(PROPOSED_LESSON, 50)}, ['context_id', 'request_id', 'base_revision', 'mode', 'summary']),
+    'course_apply': ({**CONTEXT, 'proposal_id': ID}, ['context_id', 'proposal_id']),
+    'course_dismiss': ({**CONTEXT, 'proposal_id': ID}, ['context_id', 'proposal_id']),
     'course_source': ({**CONTEXT, 'job_id': ID, 'source_id': ID, 'status': enum('read', 'failed', 'unsupported'), 'excerpt': string(50000, 0), 'error': string(2000, 0)}, ['context_id', 'job_id', 'source_id', 'status']),
     'course_start': ({'request_id': ID, 'title': string(300), 'interest': string(12000), 'intent': enum('topic', 'project', 'sources'), 'level': enum('beginner', 'intermediate', 'advanced'), 'materials': array(MATERIAL, 20)}, ['request_id', 'title', 'intent', 'level', 'materials']),
     'course_open': ({'track_id': ID}, ['track_id']),
@@ -149,7 +153,7 @@ def action(name, params, *, channel='ui_direct', api_version=1):
         raise LearningError('Unsupported adapter channel')
     if not isinstance(name, str) or name not in SPECS:
         raise LearningError('Unknown learning action')
-    if channel == 'chat_relayed' and name in ('course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
+    if channel == 'chat_relayed' and name in ('course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
         raise LearningError('This action requires the human workspace or explicit slash command')
     _validate(params, parameters(name))
     try:

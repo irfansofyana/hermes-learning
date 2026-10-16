@@ -29,6 +29,27 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
        await action('course_lesson',{context_id:c.context_id,job_id:c.job_id,lesson_key:key,source_ids,content:'# Follow the flow\n\nThis is a simulated lesson for the development preview. In Hermes, this space contains a lesson generated from your topic, project, and permitted sources.\n\n## Work through an example\n\nA queue holds tasks in the order they arrive. Add **A**, then **B**. Taking the next task returns **A**.\n\n```text\nadd(A) → [A]\nadd(B) → [A, B]\ntake() → A; queue = [B]\n```\n\n## Try it yourself\n\nAdd a third task and trace the order. Use the tutor to ask for an explanation or another example. Practice is optional.'});
        reply='Your preview lesson is saved. Select the next lesson or ask a question to test the interface.';
       }
+      if(!c.job_id){
+       const text=params.text.split('\n[/Hermes Learning context]\n\n').slice(1).join('\n').toLowerCase();
+       if(c.change_request||/\b(rewrite|revise|regenerate|extend)\b|adjust.{0,30}(roadmap|path)|update.{0,30}(lesson|roadmap|path)/.test(text)){
+        const course=await action('course_read',{track_id:c.track_id});
+        const mode=c.change_request?.mode||(text.includes('regenerate')?'regenerate':text.includes('extend')?'extend':'revise');
+        const suffix=crypto.randomUUID().slice(0,8),sources=course.sources.filter(source=>['provided','read'].includes(source.read_status)&&source.sharing!=='metadata-only').map(source=>source.id);
+        const content='## Practical queue walkthrough\n\nThis is a simulated revision proposed by the development tutor. Push two tasks, then process them in order.\n\n```python\nqueue = ["A", "B"]\ntask = queue.pop(0)\nprint(task)\n```\n\nThe expected first task is `A`. Try adding a third task and predict the next value. This example has not been executed.';
+        let outline=course.outline,lessons=[],summary='Rewrite the current lesson with a practical queue example.';
+        if(mode==='extend'){
+         const key='worker-'+suffix;outline=[...outline,{key,title:'Build a retry-safe worker',goal:'Implement retries without duplicating effects.'}];lessons=[{lesson_key:key,content,source_ids:sources}];summary='Extend the path with a retry-safe worker project and its first lesson.';
+        }else if(mode==='regenerate'){
+         outline=[{key:'new-start-'+suffix,title:'Rebuild from a concrete example',goal:'Understand queues through a runnable project.'},{key:'failure-'+suffix,title:'Practice with failures',goal:'Handle worker failures and retries.'}];lessons=[{lesson_key:outline[0].key,content,source_ids:sources}];summary='Replace the roadmap with a practical project path and a new first lesson.';
+        }else if(c.change_request?.target==='path'||text.includes('roadmap')){
+         outline=outline.map((item,index)=>index===outline.length-1?{...item,title:'Build a reliable worker',goal:'Practise retries and failure handling.'}:item);summary='Make the next roadmap milestone more practical.';
+        }else{
+         const key=c.change_request?.lesson_key||c.lesson_key||outline[0].key;lessons=[{lesson_key:key,content,source_ids:sources}];
+        }
+        await action('course_propose',{context_id:c.context_id,request_id:crypto.randomUUID(),base_revision:course.revision||1,mode,summary,outline,lessons});
+        reply='I proposed the changes with a preview. Review the suggestion and choose Apply changes when it looks right. Your saved path has not changed yet.';
+       }
+      }
       if(disposed)return;
       emit('message.delta',{text:reply});history.push({role:'assistant',text:reply});save(sid,history);timer=null;emit('message.complete',{text:reply,status:'complete'});
      }catch(e){timer=null;emit('message.complete',{status:'error',error:e.message,text:''});}
