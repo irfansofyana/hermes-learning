@@ -17,18 +17,43 @@ function Inline({text}){
   return part;
  });
 }
+function tableRow(line){
+ const text=line.trim(),cells=[];let cell='',pipes=0;
+ for(let i=0;i<text.length;i++){
+  if(text[i]==='\\'&&text[i+1]==='|'){cell+='|';i++;}
+  else if(text[i]==='\\'&&text[i+1]==='\\'){cell+='\\\\';i++;}
+  else if(text[i]==='|'){cells.push(cell.trim());cell='';pipes++;}
+  else cell+=text[i];
+ }
+ cells.push(cell.trim());
+ if(text.startsWith('|'))cells.shift();
+ if(text.endsWith('|')&&cells.at(-1)==='')cells.pop();
+ return {cells,pipes};
+}
+function tableHeader(lines,index){
+ if(index+1>=lines.length)return null;
+ const header=tableRow(lines[index]),divider=tableRow(lines[index+1]);
+ if(!(header.pipes||divider.pipes)||!header.cells.length||header.cells.length!==divider.cells.length||!divider.cells.every(cell=>/^:?-{3,}:?$/.test(cell)))return null;
+ return {headers:header.cells,alignments:divider.cells.map(cell=>cell.startsWith(':')?cell.endsWith(':')?'center':'left':cell.endsWith(':')?'right':undefined)};
+}
 export function Markdown({content=''}){
  const lines=String(content).replace(/\r\n/g,'\n').split('\n'),blocks=[];
  for(let i=0;i<lines.length;){
   const line=lines[i];
   if(!line.trim()){i++;continue;}
   if(/^\s*```/.test(line)){const language=line.trim().slice(3),code=[];i++;while(i<lines.length&&!/^\s*```/.test(lines[i]))code.push(lines[i++]);if(i<lines.length)i++;blocks.push(<div className="lw-code-block" key={i}>{language&&<div className="lw-code-language">{language}</div>}<pre><code>{code.join('\n')}</code></pre></div>);continue;}
+  const table=tableHeader(lines,i);
+  if(table){
+   const rows=[];i+=2;
+   while(i<lines.length&&lines[i].trim()&&!/^\s*(?:#{1,6}\s|```|>|[-*+]\s|\d+[.)]\s)/.test(lines[i])&&tableRow(lines[i]).pipes){rows.push(tableRow(lines[i++]).cells);}
+   blocks.push(<div className="lw-table-wrap" role="region" aria-label="Lesson table" tabIndex={0} key={i}><table><thead><tr>{table.headers.map((header,j)=><th key={j} scope="col" style={{textAlign:table.alignments[j]}}><Inline text={header}/></th>)}</tr></thead><tbody>{rows.map((row,k)=><tr key={k}>{table.headers.map((_,j)=><td key={j} style={{textAlign:table.alignments[j]}}><Inline text={row[j]||''}/></td>)}</tr>)}</tbody></table></div>);continue;
+  }
   const heading=line.match(/^(#{1,6})\s+(.+)$/);
   if(heading){const Tag=`h${Math.min(heading[1].length+1,6)}`;blocks.push(<Tag key={i}><Inline text={heading[2]}/></Tag>);i++;continue;}
   if(/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(line)){blocks.push(<hr key={i++}/>);continue;}
   if(/^\s*>\s?/.test(line)){const quote=[];while(i<lines.length&&/^\s*>/.test(lines[i]))quote.push(lines[i++].replace(/^\s*>\s?/,''));blocks.push(<blockquote key={i}><Inline text={quote.join(' ')}/></blockquote>);continue;}
   if(/^\s*(?:[-*+]\s|\d+[.)]\s)/.test(line)){const ordered=/^\s*\d/.test(line),items=[];while(i<lines.length&&/^\s*(?:[-*+]\s|\d+[.)]\s)/.test(lines[i]))items.push(lines[i++].replace(/^\s*(?:[-*+]|\d+[.)])\s+/,''));const Tag=ordered?'ol':'ul';blocks.push(<Tag key={i}>{items.map((item,j)=><li key={j}><Inline text={item}/></li>)}</Tag>);continue;}
-  const paragraph=[line];i++;while(i<lines.length&&lines[i].trim()&&!/^(?:#{1,6}\s|\s*```|\s*>|\s*[-*+]\s|\s*\d+[.)]\s)/.test(lines[i]))paragraph.push(lines[i++]);blocks.push(<p key={i}><Inline text={paragraph.join('\n')}/></p>);
+  const paragraph=[line];i++;while(i<lines.length&&lines[i].trim()&&!tableHeader(lines,i)&&!/^(?:#{1,6}\s|\s*```|\s*>|\s*[-*+]\s|\s*\d+[.)]\s)/.test(lines[i]))paragraph.push(lines[i++]);blocks.push(<p key={i}><Inline text={paragraph.join('\n')}/></p>);
  }
  return <div className="lw-markdown">{blocks}</div>;
 }

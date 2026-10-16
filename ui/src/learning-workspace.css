@@ -14,3 +14,4 @@
 .lw-root .lw-import-note{margin-top:12px}
 
 .lw-citation-unavailable{color:var(--lw-muted);font-size:.85em;font-style:italic}
+.lw-table-wrap{max-width:100%;overflow-x:auto;margin:22px 0;border:1px solid var(--lw-line);border-radius:7px;scrollbar-width:thin}.lw-table-wrap:focus-visible{outline:2px solid var(--lw-blue);outline-offset:3px}.lw-markdown table{width:100%;border-collapse:collapse;font-size:.92em;line-height:1.6}.lw-markdown th,.lw-markdown td{min-width:6rem;padding:11px 14px;text-align:left;vertical-align:top;overflow-wrap:normal;border-bottom:1px solid var(--lw-line)}.lw-markdown th{font-weight:600;background:var(--lw-code)}.lw-markdown tbody tr:last-child td{border-bottom:0}

@@ -68,7 +68,7 @@ Supplied text is marked `provided`; links begin `unread`. Retrieval can record `
 
 External research citations use ordinary Markdown links containing the actual retrieved URL. Attached material still uses validated `source_ids`. Lesson publication rejects internal provider citation markers with a retryable validation error; older unresolved markers display a missing-source-link label instead of exposing search handles or guessing a URL.
 
-The UI renders Markdown as escaped React elements. Raw HTML, scripts, source code, and arbitrary visual markup are not interpreted. Sequence, state-machine, and code-trace visuals use the existing bounded schemas and fixed components, with source disclosure and hidden-step gates enforced by the service.
+The UI renders Markdown as escaped React elements. Tables render with column headers, alignment, inline formatting, and a keyboard-focusable horizontal scrolling region for narrow screens. Raw HTML, scripts, source code, and arbitrary visual markup are not interpreted. Sequence, state-machine, and code-trace visuals use the existing bounded schemas and fixed components, with source disclosure and hidden-step gates enforced by the service.
 
 ## Practice evidence and storage
 
