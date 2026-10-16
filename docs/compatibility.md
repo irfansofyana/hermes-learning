@@ -88,3 +88,12 @@ The installable files now live at the repository root. This follows the layout u
 The actual local Hermes detector reproduced `agent=false, desktop=false` before the change and detects both afterward. The isolated host loads 17 tools, one command and both teaching skills from the relocated package. All 63 Python tests pass, including a new repository-root packaging regression. `dev/check-install.mjs` supports both local detection and a fresh Git clone/desktop installation into a temporary directory, so future release checks can cover the repository URL rather than only a manually staged package.
 
 The host admission validator additionally required the manifest to declare the 17 registered tools. Its security scan flagged a literal adversarial prompt in the evaluation checklist; that case is now described without quoting the attack instruction. All admission checks, including capability probing, desktop surface checks and the security scan, pass. The validator still reports non-blocking private-import warnings for the development host runners and historical spike; production plugin modules use the public integration surface.
+
+## Product limits
+
+- Conversation-bound consent needs a verified Hermes identity bridge. Current contexts are revocable private capabilities, not authenticated conversation identities. This is a personal single-user plugin.
+- Chat authoring uses Hermes tools; no new backend inference, search service, PDF ingestion, repository execution, or automatic full-book processing is included.
+- Reference verification is author-reported. Source protection follows declared source references; it cannot retrospectively retract content already shared with a model.
+- Review uses a transparent 1/3/7-day heuristic: policy v2 follows linked objectives, while unlinked legacy activities retain policy v1. Evidence summaries are not calibrated mastery or retention estimates.
+- Generated-help capture requires the tutor to use the help tool before giving assistance. Teaching quality and actual messaging-channel behavior need ongoing evaluation; skill loading alone does not prove adherence.
+- Native chat preparation depends on the inspected desktop composer API, preserves existing drafts, and does not send messages. Arbitrary remote/proxy topologies, offline writes, multi-user operation, and all-version host support are not claimed.

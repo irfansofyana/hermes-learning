@@ -1,4 +1,8 @@
-# Isolated learning workspace preview
+# Development guide
+
+Use Node.js 22+ and Python 3.11+. The plugin backend uses Hermes’s FastAPI/Pydantic runtime.
+
+## Local preview
 
 This preview serves the shared UI against the actual learning store, using a Python standard-library HTTP adapter. It does not load Hermes, install the plugin, restart the daily instance, or prove compatibility with the real dashboard, Electron client, or messaging channels.
 
@@ -54,3 +58,45 @@ node dev/check-workspace.mjs
 ```
 
 Omit `PLAYWRIGHT_MODULE` to resolve `playwright` normally and `CHROME_PATH` to use Playwright's installed Chromium. Screenshots go to `/tmp/hermes-learning-ui-check`, overridable with `LEARNING_SCREENSHOT_DIR`. Restricted containers may require loopback/browser permission; `LEARNING_BROWSER_NO_SANDBOX=1` is an explicit opt-in for disposable test containers that cannot use Chromium's sandbox.
+
+## Host bundles and isolated setup
+
+Build output:
+
+| Surface | Artifact | Runtime |
+| --- | --- | --- |
+| Backend + web | Root Python modules and `dashboard/` | Hermes backend plugin manager and dashboard |
+| Desktop | `desktop/plugin.js` | Hermes native disk-plugin loader and `@hermes/plugin-sdk` |
+| Development preview | `ui/dist/` | Local isolated preview server |
+
+The web bundle uses the host's `__HERMES_PLUGIN_SDK__.React` and authenticated `fetchJSON`. Desktop imports the host's React and SDK and uses `ctx.rest`. Neither ships a second React runtime into Hermes. Both are built from `ui/src/`; do not edit generated bundles by hand.
+
+## Check the real host in isolation
+
+Use an existing Hermes checkout and its Python environment. These commands stage a copy into a fresh owned directory, not your daily Hermes profile:
+
+```sh
+/path/to/hermes-agent/.venv/bin/python -B dev/hermes.py prepare --source /path/to/hermes-agent --home /tmp/hermes-learning-host
+/path/to/hermes-agent/.venv/bin/python -B dev/hermes.py inspect --source /path/to/hermes-agent --home /tmp/hermes-learning-host
+/path/to/hermes-agent/.venv/bin/python -B dev/hermes.py serve --source /path/to/hermes-agent --home /tmp/hermes-learning-host --port 8878
+```
+
+The dashboard tab is `/learning`; the plugin ID is `hermes-learning`. The command is `/learning-track`, because `/learning` is already a built-in command in the tested host. Remote desktop needs both the installed frontend and the compatible plugin on its connected backend/profile. Backend installation alone is not proof that a remote desktop frontend is installed.
+
+For native disk distribution, the loader expects `<local HERMES_HOME>/desktop-plugins/hermes-learning/plugin.js`. The tested unified plugin installer also discovers a package's `desktop/plugin.js` and copies it into the local desktop-plugin directory. Enablement is exposed under **Capabilities → Plugins → Desktop** in the tested desktop build. Follow your host's plugin installation workflow; no daily installation or restart was performed by this change.
+
+
+## Test suite
+
+Run the backend suite with the same Python environment that supplies Hermes's FastAPI dependencies. Preview HTTP tests need loopback socket permission.
+
+```sh
+/path/to/hermes-agent/.venv/bin/python -B -W error::ResourceWarning -m unittest discover -s tests -v
+npm --prefix ui test
+npm --prefix ui run build
+python3 -B dev/evaluate.py
+/path/to/hermes-agent/.venv/bin/python -B -W error::ResourceWarning -m unittest discover -s spikes/001-cross-client-learning/tests -v
+node spikes/001-cross-client-learning/tests/check_recovery.cjs
+```
+
+The service tests cover consent/revocation, cross-track references, source policy, version/key gating, retries, assistance, corrections, objective evidence, fixed-clock scheduling, concurrent startup, and backup restoration. The deterministic evaluation checks complete tool flows; it does not evaluate a model's teaching. See the [tutoring evaluation guide](../docs/evaluations/tutoring.md) and [compatibility](../docs/compatibility.md) for observed results and runtime boundaries.
