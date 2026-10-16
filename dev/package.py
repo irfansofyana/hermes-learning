@@ -64,7 +64,7 @@ def archive(path, contents):
             output.writestr(entry, content, compresslevel=9)
 
 
-def package(source=ROOT / 'plugin', output=ROOT / 'dist'):
+def package(source=ROOT, output=ROOT / 'dist'):
     contents = collect(source)  # Validate everything before producing artifacts.
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)

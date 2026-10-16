@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import shutil
 import subprocess
 import sys
 
@@ -110,7 +109,12 @@ def main():
     cmd = [str(python), "-B", str(Path(__file__).resolve()), "_worker"]
     if options.action == "prepare":
         target = Path(env["HERMES_HOME"]) / "plugins" / PLUGIN_ID
-        shutil.copytree(HERE / "plugin", target, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        # Stage only release artifacts, never this repository's .git, tests or data.
+        from package import collect
+        for relative, content in collect(HERE).items():
+            destination = target / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(content)
         subprocess.run(cmd + ["configure"], env=env, check=True, cwd=env["HOME"])
         print("Isolated plugin staged at", target)
     elif options.action == "serve":

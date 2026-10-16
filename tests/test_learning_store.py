@@ -10,9 +10,9 @@ import tempfile
 import time
 import unittest
 
-SPEC = importlib.util.find_spec('plugin.learning_store')
+SPEC = importlib.util.find_spec('learning_store')
 if SPEC:
-    from plugin.learning_store import Store, LearningError
+    from learning_store import Store, LearningError
 
 
 class LearningStoreTests(unittest.TestCase):
@@ -142,7 +142,7 @@ class LearningStoreTests(unittest.TestCase):
     def test_independent_processes_initialize_once(self):
         # Synchronize after imports so this exercises simultaneous journal-mode
         # initialization, not merely concurrent process launch.
-        code = "from plugin.learning_store import Store; import sys,time; time.sleep(max(0,float(sys.argv[2])-time.monotonic())); print(Store(sys.argv[1]).dispatch('state', {})['store_id'])"
+        code = "from learning_store import Store; import sys,time; time.sleep(max(0,float(sys.argv[2])-time.monotonic())); print(Store(sys.argv[1]).dispatch('state', {})['store_id'])"
         for index in range(3):
             fresh = str(Path(self.temp.name) / f'fresh-{index}.db')
             ready_at = str(time.monotonic() + 0.3)

@@ -11,6 +11,15 @@ SPEC.loader.exec_module(packager)
 
 
 class PackageTests(unittest.TestCase):
+    def test_repository_root_is_an_installable_release(self):
+        # The Git installer inspects the clone root, not a nested plugin/ folder.
+        contents = packager.collect(Path(__file__).resolve().parents[1])
+        with tempfile.TemporaryDirectory() as output:
+            combined, _ = packager.package(output=output)
+            with zipfile.ZipFile(combined) as archive:
+                self.assertEqual(archive.read('hermes-learning/__init__.py'), contents['__init__.py'])
+                self.assertEqual(archive.read('hermes-learning/desktop/plugin.js'), contents['desktop/plugin.js'])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

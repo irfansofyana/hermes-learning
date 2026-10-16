@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -12,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class AdapterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        spec = importlib.util.spec_from_file_location('learning_adapter_test', ROOT / 'plugin/__init__.py', submodule_search_locations=[str(ROOT / 'plugin')])
+        spec = importlib.util.spec_from_file_location('learning_adapter_test', ROOT / '__init__.py', submodule_search_locations=[str(ROOT)])
         cls.plugin = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = cls.plugin
         spec.loader.exec_module(cls.plugin)
@@ -25,6 +26,8 @@ class AdapterTests(unittest.TestCase):
             def register_skill(self, *args): self.skills.append(args)
         ctx = Context()
         self.plugin.register(ctx)
+        manifest_tools = re.findall(r'^  - (learning_[a-z_]+)$', (ROOT / 'plugin.yaml').read_text(), re.MULTILINE)
+        self.assertEqual(set(manifest_tools), set(ctx.tools), 'Declared capabilities must match the registered tools for Hermes admission')
         self.assertIn('learning-track', ctx.commands)
         for forbidden in ('learning_start', 'learning_resume', 'learning_export', 'learning_approve', 'learning_recommendation_decide', 'learning_track_status', 'learning_review'):
             self.assertNotIn(forbidden, ctx.tools)
@@ -173,7 +176,7 @@ except ImportError:
 class HttpAdapterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        spec = importlib.util.spec_from_file_location('learning_http_test', ROOT / 'plugin/dashboard/plugin_api.py')
+        spec = importlib.util.spec_from_file_location('learning_http_test', ROOT / 'dashboard/plugin_api.py')
         cls.http = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = cls.http
         spec.loader.exec_module(cls.http)

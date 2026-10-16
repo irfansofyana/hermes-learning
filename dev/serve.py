@@ -157,7 +157,7 @@ def main():
     if data_dir == ROOT or ROOT in data_dir.parents or data_dir == daily or daily in data_dir.parents:
         parser.error('Preview data must be outside the repository and ~/.hermes')
     data_dir.mkdir(parents=True, exist_ok=True)
-    spec = importlib.util.spec_from_file_location('hermes_learning_preview_store', ROOT / 'plugin/learning_store.py')
+    spec = importlib.util.spec_from_file_location('hermes_learning_preview_store', ROOT / 'learning_store.py')
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

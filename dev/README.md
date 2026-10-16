@@ -28,6 +28,18 @@ python3 -B -W error::ResourceWarning -m unittest discover -s tests -p test_previ
 
 These tests bind ephemeral loopback ports. A sandbox that prohibits socket creation must allow loopback execution for this command. Tests cover session authentication, origin/Host checks, the action envelope, read routing, and static path restrictions; they use a fake dispatcher to isolate the HTTP boundary. Store and real host integration have separate tests and verification requirements.
 
+## Repository installation check
+
+The repository root is the installable package. `npm --prefix ui run build` writes the committed host bundles to `dashboard/dist/index.js` and `desktop/plugin.js`; `dev/package.py` and the isolated host runner use an explicit release-file list from that root.
+
+With an existing Hermes checkout, run its actual Desktop installer discovery against this checkout:
+
+```sh
+node dev/check-install.mjs /path/to/hermes-agent
+```
+
+Append `https://github.com/irfansofyana/hermes-learning` to also clone and probe the published repository, then install its desktop component into a temporary directory. This checks that the remote bundle matches the local build. All temporary files are removed afterward; no daily Hermes profile or desktop installation is touched. Run this after publishing layout or bundle changes.
+
 ## Learning-loop checks
 
 Run `python3 -B dev/evaluate.py` for deterministic tool/record scenarios. Live-model cases and their limits are documented in [the evaluation guide](../docs/evaluations/tutoring.md).

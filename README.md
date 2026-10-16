@@ -22,6 +22,16 @@ Ordinary educational chat remains ad hoc. Opening the workspace reads records bu
 
 ## Build and try it
 
+For installation from Git, use the repository URL in Hermes Desktop's **Install plugin** dialog:
+
+```text
+https://github.com/irfansofyana/hermes-learning
+```
+
+The repository root is the installable package: `plugin.yaml` and `__init__.py` expose the backend, `dashboard/` exposes the web workspace, and `desktop/plugin.js` exposes the desktop UI. Built bundles are committed, so installation needs no frontend build. After installation, enable Learning under **Capabilities → Plugins → Desktop**. The connected backend must have the agent component enabled too.
+
+Alternatively, install on the backend with `hermes plugins install https://github.com/irfansofyana/hermes-learning --enable`, then restart its dashboard/API server to load new routes. For a remote backend, install or update the desktop component on the desktop machine as well.
+
 Use Node.js 22+ and Python 3.11+. The plugin backend uses Hermes's existing FastAPI/Pydantic runtime; the standalone development preview needs only Python's standard library.
 
 ```sh
@@ -36,8 +46,8 @@ Build output:
 
 | Surface | Artifact | Runtime |
 | --- | --- | --- |
-| Backend + web | `plugin/` | Hermes backend plugin manager and dashboard |
-| Desktop | `plugin/desktop/plugin.js` | Hermes native disk-plugin loader and `@hermes/plugin-sdk` |
+| Backend + web | Root Python modules and `dashboard/` | Hermes backend plugin manager and dashboard |
+| Desktop | `desktop/plugin.js` | Hermes native disk-plugin loader and `@hermes/plugin-sdk` |
 | Development preview | `ui/dist/` | Local isolated preview server |
 
 The web bundle uses the host's `__HERMES_PLUGIN_SDK__.React` and authenticated `fetchJSON`. Desktop imports the host's React and SDK and uses `ctx.rest`. Neither ships a second React runtime into Hermes. Both are built from `ui/src/`; do not edit generated bundles by hand.

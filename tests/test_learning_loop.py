@@ -7,7 +7,7 @@ import sqlite3
 import tempfile
 import unittest
 
-from plugin.learning_store import Store, LearningError
+from learning_store import Store, LearningError
 
 
 class LearningLoopTests(unittest.TestCase):

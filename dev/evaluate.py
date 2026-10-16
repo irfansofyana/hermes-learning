@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('learning_evaluation_runtime', ROOT / 'plugin/runtime.py')
+spec = importlib.util.spec_from_file_location('learning_evaluation_runtime', ROOT / 'runtime.py')
 runtime = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runtime)
 
