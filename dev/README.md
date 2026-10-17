@@ -22,6 +22,8 @@ The API base is `/api/plugins/hermes-learning`. Reads include `/state`, `/track/
 
 ## Browser checks
 
+`dev/check-navigation.mjs` holds a simulated lesson publication while browsing saved lessons, future lesson goals, home, and another path. It verifies only one generation starts, the tutor remains attached, background completion stays with its own path, and reading position is preserved, including mobile navigation. Use the browser environment variables below and a disposable preview store.
+
 `dev/check-selection.mjs` runs against the labelled disposable preview using the same browser environment variables below. It applies Desktop’s body-level selection restriction and verifies actual mouse drag selection plus native clipboard copying for lesson titles/text/code, both chat roles, thinking, and source text. It makes no model calls.
 
 `dev/check-integrated.mjs` exercises the current primary interface: multiple files and an unsupported PDF, an unread link, first-lesson generation, inline chat, next-lesson generation, read markers, reload/Continue with history, tutor visibility, and mobile dark-mode draft preservation. It checks console/page errors and horizontal overflow and captures screenshots outside the repository.
