@@ -112,3 +112,10 @@ Production UI bundles include pinned Markdown and syntax-highlighting dependenci
 For explicit removal of the old experience's data, use [the legacy cleanup procedure](../docs/data-and-recovery.md). Test it only against disposable stores during development. The browser check also verifies that records navigation is absent and old client drafts are discarded.
 
 `dev/check-updates.mjs` checks conversational lesson rewrites, extension, regeneration, review/apply/dismiss, pending-proposal reload, and read-progress/conversation preservation in the simulated preview. Use the same Playwright environment settings as the other browser checks and an isolated disposable store; it creates one new path. Screenshots default to `/tmp/hermes-learning-updates-check`.
+
+
+## Lesson practice and model checks
+
+`dev/check-practice.mjs` uses the labelled preview and a disposable store. It checks configured-model selection, separate inline feedback, hints, retry/history, navigation during evaluation, local draft and backend feedback restoration, explicit tutor handoff, skipping independently from read progress, and mobile overflow. Use the same Playwright environment variables as the other browser scripts. Screenshot files are `/tmp/hermes-learning-practice-desktop.png` and `/tmp/hermes-learning-practice-mobile.png`. The preview has synthetic models and deterministic feedback; it never calls an external model.
+
+Backend tests in `test_lesson_practice.py` cover lesson metadata, version-bound capabilities, idempotency, source policy, revoked contexts, concurrent submissions, and model preference authorization. Adapter tests exercise the practice tool restriction hook. JavaScript tests cover model discovery/branch routing and the independent practice session controller, including forbidden tools, interruption, uncertain delivery, and restoration. Real model teaching quality still requires the separate evaluation procedure.

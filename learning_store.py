@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+import secrets
 import time
 import uuid
 from urllib.parse import urlsplit
@@ -21,8 +22,8 @@ LEVELS = ['none', 'nudge', 'targeted-hint', 'worked-step', 'full-solution-shown'
 OUTCOMES = ['needs-work', 'developing', 'demonstrated']
 CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1']
 WITHHELD = 'Content withheld by source-sharing policy.'
-READS = {'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
-WRITES = {'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
+READS = {'practice_read', 'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
+WRITES = {'course_model', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback', 'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
 KINDS = ('track', 'source', 'activity', 'attempt', 'assessment', 'review', 'dispute', 'help', 'run', 'context', 'recommendation')
 
 
@@ -110,6 +111,19 @@ class Store:
             except BaseException:
                 db.rollback()
                 raise
+
+    @staticmethod
+    def is_practice_session(path, session_id):
+        """Inspect durable bindings without initializing or mutating a profile."""
+        path = Path(path).expanduser().resolve()
+        if not path.is_file():
+            return False
+        db = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5)
+        try:
+            rows = db.execute("SELECT data FROM records WHERE kind='practice_attempt'")
+            return any(json.loads(row[0]).get('session_id') == session_id for row in rows)
+        finally:
+            db.close()
 
     @contextmanager
     def _connection(self):
@@ -472,6 +486,173 @@ class Store:
         # uses visible_steps to withhold answers only in assessed activities.
         return {**visual, 'visible_steps': len(visual['steps'])} if visual else None
 
+    def _lesson_details(self, value):
+        details = {}
+        if 'teaching' in value:
+            teaching = value['teaching']
+            if not isinstance(teaching, dict) or set(teaching) != {'outcome', 'prerequisites', 'misconception'}:
+                fail('Teaching requires outcome, prerequisites and misconception')
+            details['teaching'] = {'outcome': text(teaching['outcome'], 'outcome', 2000, True),
+                                   'prerequisites': strings(teaching['prerequisites'], 'prerequisites', 20, 1000),
+                                   'misconception': text(teaching['misconception'], 'misconception', 2000, True)}
+        if 'practice' in value:
+            practice = value['practice']
+            if practice is None:
+                details['practice'] = None
+            else:
+                if not isinstance(practice, dict) or set(practice) != {'kind', 'prompt', 'criteria', 'hints', 'explanation'}:
+                    fail('Practice requires kind, prompt, criteria, hints and explanation')
+                if practice['kind'] not in ('explanation', 'code', 'project'):
+                    fail('Unsupported practice kind')
+                criteria = strings(practice['criteria'], 'criteria', 20, 2000)
+                if not criteria:
+                    fail('Practice requires at least one criterion')
+                details['practice'] = {'kind': practice['kind'], 'prompt': text(practice['prompt'], 'prompt', 12000, True),
+                                       'criteria': criteria, 'hints': strings(practice['hints'], 'hints', 5, 5000),
+                                       'explanation': text(practice['explanation'], 'explanation', 12000, True)}
+        return details
+
+    def _course_model(self, selection):
+        if selection is None:
+            return None
+        if not isinstance(selection, dict) or set(selection) != {'provider', 'model'}:
+            fail('Model selection requires provider and model')
+        return {'provider': text(selection['provider'], 'provider', 200, True),
+                'model': text(selection['model'], 'model', 300, True)}
+
+    def _practice_fingerprint(self, lesson):
+        # Record identity also prevents a regenerated lesson with version 1
+        # from inheriting attempts from a deleted lesson with the same key.
+        snapshot = {field: lesson.get(field) for field in ('id', 'version', 'title', 'content', 'source_ids', 'teaching', 'practice')}
+        return hashlib.sha256(json.dumps(snapshot, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+    def _practice_current(self, db, attempt):
+        lesson = next((item for item in self._all(db, 'lesson', attempt['track_id']) if item['key'] == attempt['lesson_key']), None)
+        return lesson is not None and self._practice_fingerprint(lesson) == attempt['lesson_fingerprint']
+
+    def _practice_invalidate(self, db, tid, now):
+        for attempt in self._all(db, 'practice_attempt', tid):
+            if attempt['status'] == 'pending' and not self._practice_current(db, attempt):
+                attempt.update(status='stale', error='The lesson changed before evaluation completed.', updated_at=now)
+                self._put(db, 'practice_attempt', attempt, True)
+
+    def _practice_view(self, attempt):
+        return {key: value for key, value in attempt.items() if key not in
+                ('context_id', 'evaluation_token', 'request_hash', 'lesson_fingerprint')}
+
+    def _practice_submission(self, attempt, lesson):
+        # A completed/stopped/stale request is never reopened by retry delivery.
+        evaluation = None
+        if attempt['status'] == 'pending':
+            evaluation = {'attempt_id': attempt['id'], 'evaluation_token': attempt['evaluation_token'],
+                          'lesson': {field: lesson.get(field) for field in ('content', 'title', 'teaching', 'practice')},
+                          'answer': attempt['answer'], 'hints_used': attempt['hints_used'],
+                          'explanation_shown': attempt['explanation_shown']}
+        return {'attempt': self._practice_view(attempt), 'evaluation': evaluation}
+
+    def _practice_dispatch(self, db, action, p, channel):
+        now = iso(self.clock())
+        if action == 'practice_feedback':
+            attempt = self._get(db, 'practice_attempt', p.get('attempt_id'))
+            token = text(p.get('evaluation_token'), 'evaluation_token', 100, True)
+            if not secrets.compare_digest(token.encode(), attempt['evaluation_token'].encode()):
+                fail('Invalid evaluation capability', 'evaluation_scope', 403)
+            self._context(db, attempt['context_id'])
+            if not self._practice_current(db, attempt):
+                fail('Lesson changed before evaluation completed', 'revision_conflict', 409)
+            outcome = p.get('outcome')
+            if outcome not in ('correct', 'partial', 'retry'):
+                fail('Unsupported practice outcome')
+            feedback = text(p.get('feedback'), 'feedback', 12000, True)
+            if attempt['status'] == 'completed' and attempt.get('outcome') == outcome and attempt.get('feedback') == feedback:
+                return {'attempt': self._practice_view(attempt)}
+            if attempt['status'] != 'pending':
+                fail('Practice evaluation has ended', 'attempt_closed', 409)
+            attempt.update(status='completed', outcome=outcome, feedback=feedback, updated_at=now)
+            self._put(db, 'practice_attempt', attempt, True)
+            return {'attempt': self._practice_view(attempt)}
+        if channel != 'ui_direct':
+            fail('Practice submissions and history require the human workspace', 'explicit_entry_required', 403)
+        context, track = self._context(db, p.get('context_id'))
+        tid = track['id']
+        if action in ('practice_bind', 'practice_status'):
+            attempt = self._get(db, 'practice_attempt', p.get('attempt_id'), tid)
+            if action == 'practice_bind':
+                session_id = text(p.get('session_id'), 'session_id', 200, True)
+                scope = text(p.get('scope'), 'scope', 2000, True)
+                if attempt.get('session_id'):
+                    if attempt['session_id'] != session_id or attempt['scope'] != scope:
+                        fail('Evaluation is already bound to another session', 'evaluation_scope', 409)
+                elif attempt['status'] != 'pending' or not self._practice_current(db, attempt):
+                    fail('Practice evaluation has ended', 'attempt_closed', 409)
+                else:
+                    attempt.update(session_id=session_id, scope=scope, updated_at=now)
+                    self._put(db, 'practice_attempt', attempt, True)
+            else:
+                status = p.get('status')
+                if status not in ('failed', 'stopped'):
+                    fail('Unsupported practice status')
+                error = text(p.get('error', ''), 'error', 2000)
+                # Terminal feedback wins races against late transport errors.
+                if attempt['status'] == 'pending':
+                    attempt.update(status=status, error=error, updated_at=now)
+                    self._put(db, 'practice_attempt', attempt, True)
+            return {'attempt': self._practice_view(attempt)}
+        key = text(p.get('lesson_key'), 'lesson_key', 80, True)
+        lesson = next((item for item in self._all(db, 'lesson', tid) if item['key'] == key), None)
+        if lesson is None:
+            fail('Published lesson not found', 'not_found', 404)
+        attempts = self._all(db, 'practice_attempt', tid)
+        if action == 'practice_read':
+            return {'attempts': [self._practice_view(item) for item in attempts
+                                 if item['lesson_key'] == key and self._practice_fingerprint(lesson) == item['lesson_fingerprint']]}
+        if action != 'practice_submit':
+            fail('Unknown practice action')
+        request_id = text(p.get('request_id'), 'request_id', 100, True)
+        request = {field: p.get(field) for field in ('lesson_key', 'lesson_version', 'answer', 'hints_used', 'explanation_shown')}
+        digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        existing = next((item for item in attempts if item['request_id'] == request_id), None)
+        if existing:
+            if existing['request_hash'] != digest:
+                fail('Request ID already used with different input', 'idempotency_conflict', 409)
+            if not self._practice_current(db, existing):
+                fail('Lesson changed since this submission', 'revision_conflict', 409)
+            return self._practice_submission(existing, lesson)
+        version = p.get('lesson_version')
+        if type(version) is not int or version != lesson.get('version', 1):
+            fail('Lesson changed; reload before submitting', 'revision_conflict', 409)
+        practice = lesson.get('practice')
+        if not practice:
+            fail('This lesson has no practice', 'practice_unavailable', 409)
+        if any(self._get(db, 'source', sid, tid)['sharing'] == 'metadata-only' for sid in lesson['source_ids']):
+            fail('Source-sharing policy prohibits model evaluation of this lesson', 'source_restricted', 403)
+        answer = text(p.get('answer'), 'answer', 30000, True)
+        hints_used, explanation_shown = p.get('hints_used'), p.get('explanation_shown')
+        if type(hints_used) is not int or not 0 <= hints_used <= len(practice['hints']) or type(explanation_shown) is not bool:
+            fail('Help exposure must match the lesson hints and use a boolean explanation flag')
+        if len(attempts) >= 500:
+            fail('This path has reached its 500 saved practice attempts', 'practice_limit', 409)
+        for previous in attempts:
+            if previous['status'] != 'pending' or previous['lesson_key'] != key:
+                continue
+            if not self._practice_current(db, previous):
+                previous.update(status='stale', error='The lesson changed before evaluation completed.', updated_at=now)
+                self._put(db, 'practice_attempt', previous, True)
+                continue
+            old_context = self._get(db, 'context', previous['context_id'])
+            old_track = self._get(db, 'track', previous['track_id'])
+            if not old_context['active'] or old_track['status'] in ('paused', 'archived'):
+                previous.update(status='stopped', error='Evaluation context ended.', updated_at=now)
+                self._put(db, 'practice_attempt', previous, True)
+                continue
+            fail('Finish or stop the current practice evaluation first', 'practice_busy', 409)
+        attempt = self._new(track_id=tid, context_id=context['id'], lesson_key=key, lesson_version=version,
+                            lesson_fingerprint=self._practice_fingerprint(lesson), request_id=request_id, request_hash=digest,
+                            answer=answer, hints_used=hints_used, explanation_shown=explanation_shown,
+                            evaluation_token=secrets.token_urlsafe(32), status='pending', created_at=now, updated_at=now)
+        self._put(db, 'practice_attempt', attempt)
+        return self._practice_submission(attempt, lesson)
+
     def _lesson_view(self, lesson):
         return {**lesson, 'visual': self._lesson_visual(lesson.get('visual'))}
 
@@ -513,7 +694,7 @@ class Store:
         titles = {item['key']: item['title'] for item in outline}
         cleaned, seen = [], set()
         for lesson in lessons:
-            if not isinstance(lesson, dict) or set(lesson) - {'lesson_key', 'content', 'source_ids', 'visual'}:
+            if not isinstance(lesson, dict) or set(lesson) - {'lesson_key', 'content', 'source_ids', 'visual', 'teaching', 'practice'}:
                 fail('Unsupported proposed lesson fields')
             key = text(lesson.get('lesson_key'), 'lesson_key', 80, True)
             if key not in titles or key in seen:
@@ -532,7 +713,7 @@ class Store:
             if '\ue200cite' in content:
                 fail('Use Markdown source links with actual URLs, not internal citation markers.', 'invalid_citation')
             cleaned.append({'lesson_key': key, 'title': titles[key], 'content': content,
-                            'source_ids': source_ids, 'visual': self._lesson_visual(lesson.get('visual'))})
+                            'source_ids': source_ids, 'visual': self._lesson_visual(lesson.get('visual')), **self._lesson_details(lesson)})
         return cleaned
 
     def _course_update(self, db, action, p, channel, context, track, course, now):
@@ -589,7 +770,7 @@ class Store:
             current = {item['key']: self._lesson_view(item) for item in self._all(db, 'lesson', tid)}
             changed = outline != course['outline'] or any(
                 item['lesson_key'] not in current or
-                any(item[field] != current[item['lesson_key']].get(field) for field in ('title', 'content', 'source_ids', 'visual'))
+                any(item.get(field) != current[item['lesson_key']].get(field) for field in ('title', 'content', 'source_ids', 'visual', 'teaching', 'practice'))
                 for item in lessons)
             if mode == 'regenerate' and set(current) - {item['lesson_key'] for item in lessons}:
                 changed = True
@@ -605,6 +786,8 @@ class Store:
 
         # Acceptance is guarded and serialized by dispatch's BEGIN IMMEDIATE.
         old = {item['key']: item for item in self._all(db, 'lesson', tid)}
+        versions = dict(course.get('lesson_versions', {}))
+        versions.update({key: lesson.get('version', 1) for key, lesson in old.items()})
         replacements = {item['lesson_key']: item for item in proposal['lessons']}
         titles = {item['key']: item['title'] for item in proposal['outline']}
         keep_keys = set(titles)
@@ -619,17 +802,19 @@ class Store:
                 self._put(db, 'lesson', lesson, True)
         for key, supplied in replacements.items():
             publication = {name: value for name, value in supplied.items() if name != 'lesson_key'}
+            versions[key] = versions.get(key, 0) + 1
             lesson = self._new(track_id=tid, key=key, **publication,
-                               version=old[key].get('version', 1) + 1 if key in old and not regenerate else 1,
+                               version=versions[key],
                                proposal_id=proposal['id'], created_at=now)
             self._put(db, 'lesson', lesson)
+        self._practice_invalidate(db, tid, now)
         available = set(replacements) | (set() if regenerate else set(old) & keep_keys)
         position = course['position']
         selected = None if regenerate else position['lesson_key']
         if selected not in available:
             selected = next((item['key'] for item in proposal['outline'] if item['key'] in available), None)
         completed = [] if regenerate else [key for key in position['completed'] if key in available and key not in replacements]
-        course.update(outline=proposal['outline'], revision=revision + 1,
+        course.update(outline=proposal['outline'], revision=revision + 1, lesson_versions=versions,
                       position={'lesson_key': selected, 'completed': completed}, updated_at=now)
         self._put(db, 'course', course, True)
         proposal.update(status='applied', applied_revision=revision + 1, updated_at=now)
@@ -642,7 +827,7 @@ class Store:
 
     def _course_dispatch(self, db, action, p, channel):
         now = iso(self.clock())
-        ui_actions = {'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
+        ui_actions = {'course_model', 'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
         if action in ui_actions and channel != 'ui_direct':
             fail('This course action requires the human workspace', 'explicit_entry_required', 403)
         if action == 'course_read':
@@ -652,9 +837,9 @@ class Store:
             lessons = [self._lesson_view(lesson) for lesson in self._all(db, 'lesson', tid)]
             for lesson in lessons:
                 if channel == 'chat_relayed' and any(self._get(db, 'source', sid, tid)['sharing'] == 'metadata-only' for sid in lesson['source_ids']):
-                    lesson.update(content=WITHHELD, title='Lesson with restricted source', visual=None, content_withheld=True)
+                    lesson.update(content=WITHHELD, title='Lesson with restricted source', visual=None, teaching=None, practice=None, content_withheld=True)
             return {'track': self._track_view(track), 'outline': course.get('outline', []),
-                    'revision': course.get('revision', 1),
+                    'revision': course.get('revision', 1), 'model': course.get('model'),
                     'proposals': [self._course_proposal_view(db, item, channel) for item in self._all(db, 'course_proposal', tid)],
                     'lessons': lessons, 'position': course.get('position', {'lesson_key': None, 'completed': []}),
                     'binding': course.get('binding') if channel == 'ui_direct' else None,
@@ -683,6 +868,9 @@ class Store:
             if size > 100000 or byte_size > 200000:
                 fail('Materials exceed 100000 characters or 200000 UTF-8 bytes', 'too_large', 413)
             payload = {'title': title, 'interest': interest, 'intent': intent, 'level': level, 'materials': materials}
+            model = self._course_model(p.get('model'))
+            if model is not None:
+                payload['model'] = model
             digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
             existing = next((r for r in self._all(db, 'course_request') if r['request_id'] == request_id), None)
             if existing:
@@ -695,7 +883,7 @@ class Store:
             track = self._get(db, 'track', tid)
             track.update(status='active', intent=intent, level=level)
             self._put(db, 'track', track, True)
-            self._put(db, 'course', self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None,
+            self._put(db, 'course', self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None, model=model,
                                              position={'lesson_key': None, 'completed': []}, created_at=now))
             for material in materials:
                 self._dispatch(db, 'source', {**material, 'context_id': context_id}, channel)
@@ -728,6 +916,10 @@ class Store:
             course = self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None,
                                position={'lesson_key': None, 'completed': []}, created_at=now)
             self._put(db, 'course', course)
+        if action == 'course_model':
+            course['model'] = self._course_model(p.get('selection'))
+            self._put(db, 'course', course, True)
+            return {'selection': course['model'], 'course': self._course_dispatch(db, 'course_read', {'track_id': tid}, channel)}
         if action in ('course_propose', 'course_apply', 'course_dismiss'):
             return self._course_update(db, action, p, channel, context, track, course, now)
         if action == 'course_generate':
@@ -755,6 +947,8 @@ class Store:
         if action == 'course_bind':
             binding = {'session_id': text(p.get('session_id'), 'session_id', 200, True),
                        'scope': text(p.get('scope'), 'scope', 2000, True)}
+            if 'model' in p:
+                binding['model'] = self._course_model(p['model'])
             course['binding'] = binding
             self._put(db, 'course', course, True)
             return binding
@@ -867,27 +1061,30 @@ class Store:
             if '\ue200cite' in content:
                 fail('Use Markdown source links with the actual URL, not internal citation markers. Correct the content and retry this same job.', 'invalid_citation')
             publication = {'key': key, 'title': item['title'], 'content': content,
-                           'source_ids': source_ids, 'visual': self._lesson_visual(p.get('visual'))}
+                           'source_ids': source_ids, 'visual': self._lesson_visual(p.get('visual')), **self._lesson_details(p)}
             digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
             if job.get('lesson_hash'):
                 saved = self._lesson_view(self._get(db, 'lesson', job['lesson_id'], tid))
                 if job['lesson_hash'] != digest:
                     # Old lessons hashed activity-style visibility. Accept only
                     # the identical normalized publication, without rewriting it.
-                    if {key: saved[key] for key in publication} != publication:
+                    if any(saved.get(key) != publication.get(key) for key in set(publication) | {'teaching', 'practice'}):
                         fail('Lesson already published with different content', 'revision_conflict', 409)
                 return {'lesson': saved}
             if job['status'] not in ('queued', 'generating'):
                 fail('Generation job has ended; explicitly generate again', 'job_closed', 409)
             if any(lesson['key'] == key for lesson in self._all(db, 'lesson', tid)):
                 fail('Lesson is already published', 'revision_conflict', 409)
-            lesson = self._new(track_id=tid, **publication, version=1, job_id=job['id'], created_at=now)
+            versions = dict(course.get('lesson_versions', {}))
+            versions[key] = versions.get(key, 0) + 1
+            lesson = self._new(track_id=tid, **publication, version=versions[key], job_id=job['id'], created_at=now)
             self._put(db, 'lesson', lesson)
             job.update(status='completed', lesson_hash=digest, lesson_id=lesson['id'], updated_at=now)
             self._put(db, 'course_job', job, True)
+            course['lesson_versions'] = versions
             if course['position']['lesson_key'] is None:
                 course['position']['lesson_key'] = key
-                self._put(db, 'course', course, True)
+            self._put(db, 'course', course, True)
             return {'lesson': lesson}
         fail('Unknown course action')
 
@@ -927,6 +1124,8 @@ class Store:
                 raise
 
     def _dispatch(self, db, action, p, channel):
+        if action.startswith('practice_'):
+            return self._practice_dispatch(db, action, p, channel)
         if action.startswith('course_'):
             return self._course_dispatch(db, action, p, channel)
         now = iso(self.clock())

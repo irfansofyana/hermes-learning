@@ -21,7 +21,8 @@ ACTIONS = frozenset(('start', 'resume', 'leave', 'brief', 'approve', 'track_stat
                      'course_start', 'course_open', 'course_read', 'course_generate',
                      'course_propose', 'course_apply', 'course_dismiss',
                      'course_bind', 'course_position', 'course_plan', 'course_lesson',
-                     'course_job_status', 'course_source'))
+                     'course_job_status', 'course_source', 'course_model',
+                     'practice_read', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback'))
 MAX_BODY = 1024 * 1024
 
 

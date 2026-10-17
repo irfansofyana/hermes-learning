@@ -1,19 +1,36 @@
 // Explicit development fixture. Only preview.jsx imports this module.
 export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
- const listeners=new Map();let active=null,timer=null,disposed=false;
+ const listeners=new Map(),timers=new Map();let active=null,disposed=false;
  const load=key=>{try{return JSON.parse(storage.getItem(`learning-preview:${key}`)||'[]');}catch{return[];}};
  const save=(key,value)=>{try{storage.setItem(`learning-preview:${key}`,JSON.stringify(value));}catch{}};
- const emit=(type,payload)=>{if(!disposed)for(const fn of listeners.get(type)||[])fn({session_id:active,payload});};
+ const emitEvent=(sid,type,payload)=>{if(!disposed)for(const fn of listeners.get(type)||[])fn({session_id:sid,payload});};
  const action=(name,params)=>request('/action',{api_version:1,action:name,params});
  return {
   onEvent(type,fn){if(!listeners.has(type))listeners.set(type,new Set());listeners.get(type).add(fn);return()=>listeners.get(type)?.delete(fn);},
-  setSession(sid){active=sid;},reconnect:async()=>{},dispose(){disposed=true;clearTimeout(timer);listeners.clear();},
+  setSession(sid){active=sid;},reconnect:async()=>{},dispose(){disposed=true;for(const timer of timers.values())clearTimeout(timer);timers.clear();listeners.clear();},
   async request(method,params={}){
+   const sid=params.session_id,emit=(type,payload)=>emitEvent(sid,type,payload);
+   if(method==='model.options')return {provider:'preview',model:'preview-default',providers:[{slug:'preview',name:'Simulated models',authenticated:true,models:['preview-default','preview-alternate']}]};
+   if(method==='config.set')return {key:'model',value:String(params.value).split(' ')[0],scope:'session'};
+
+   if(method==='session.branch_stored'){const sid=crypto.randomUUID();save(sid,load(params.parent_session_id));return {session_id:sid,stored_session_id:sid,messages:load(sid)};}
    if(method==='session.create'){const sid=crypto.randomUUID();save(sid,[]);return{session_id:sid,stored_session_id:sid};}
-   if(method==='session.resume'){active=params.session_id;return{session_id:active,stored_session_id:active,messages:load(active),running:false,todo_state:load(active+':plan')};}
+   if(method==='session.resume'){active=params.session_id;return{session_id:active,stored_session_id:active,messages:load(active),running:timers.has(active),todo_state:load(active+':plan')};}
    if(method==='session.history')return{messages:load(params.session_id)};
-   if(method==='session.activate')return{running:timer!==null,open_requests:[],todo_state:load(active+':plan')};
-   if(method==='session.interrupt'){clearTimeout(timer);timer=null;emit('message.complete',{text:'Preview stopped.',status:'interrupted'});return{};}
+   if(method==='session.activate')return{running:timers.has(sid),open_requests:[],todo_state:load(sid+':plan')};
+   if(method==='session.interrupt'){clearTimeout(timers.get(sid));timers.delete(sid);emit('message.complete',{text:'Preview stopped.',status:'interrupted'});return{};}
+   if(method==='prompt.submit'&&params.text.includes('Scoped practice data (JSON):\n')){
+    const c=JSON.parse(params.text.split('Scoped practice data (JSON):\n')[1]);
+    emit('message.start',{});
+    timers.set(sid,setTimeout(async()=>{
+     try{
+      const answer=c.answer||'',correct=/b.*c/i.test(answer);
+      await action('practice_feedback',{attempt_id:c.attempt_id,evaluation_token:c.evaluation_token,outcome:correct?'correct':'retry',feedback:correct?'Simulated feedback: B then C is correct. Taking removes A from the front; adding C appends it after B.':'Simulated feedback: trace the remaining queue after A is removed, then append C. Which task is now at the front?'});
+      timers.delete(sid);emit('tool.complete',{tool_id:'practice-'+sid,name:'learning_practice_feedback'});emit('message.complete',{status:'complete',text:'Preview answer check saved.'});
+     }catch(e){timers.delete(sid);emit('message.complete',{status:'error',error:e.message});}
+    },900));
+    return {status:'streaming'};
+   }
    if(method==='prompt.submit'){
     const sid=params.session_id;active=sid;const history=load(sid);history.push({role:'user',text:params.text});save(sid,history);
     const toolId=crypto.randomUUID();
@@ -22,7 +39,7 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
     emit('tool.start',{tool_id:toolId,name:'learning_course_read'});
     const plan={revision:Date.now(),todos:[{id:'read',content:'Review the learning path',status:'in_progress'},{id:'reply',content:'Prepare the response',status:'pending'}]};
     save(sid+':plan',plan);emit('todo.updated',plan);
-    timer=setTimeout(async()=>{
+    timers.set(sid,setTimeout(async()=>{
      try{
       const marker='Scoped learning data (JSON):\n';const raw=params.text.split(marker)[1]?.split('\n[/Hermes Learning context]')[0];const c=JSON.parse(raw);
       let reply='This is the development preview. In Hermes, your configured model answers here using the selected lesson and sources.';
@@ -32,7 +49,7 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
        if(!outline.length){outline=[{key:'first-step',title:'Understand the moving parts',goal:'Trace the inputs, state, and outputs.'},{key:'try-it',title:'Make one small change',goal:'Use an example to check your understanding.'}];await action('course_plan',{context_id:c.context_id,job_id:c.job_id,summary:'A simulated path for checking the Learning interface. Real lessons are generated by your Hermes model.',assumptions:['Development preview: simulated AI output.'],lessons:outline});}
        const key=c.lesson_key||outline[0].key;
        const source_ids=course.sources.filter(s=>s.read_status==='provided'&&s.sharing!=='metadata-only').map(s=>s.id);
-       await action('course_lesson',{context_id:c.context_id,job_id:c.job_id,lesson_key:key,source_ids,content:'# Follow the flow\n\nThis is a simulated lesson for the development preview. In Hermes, this space contains a lesson generated from your topic, project, and permitted sources.\n\n## Work through an example\n\nA queue holds tasks in the order they arrive. Add **A**, then **B**. Taking the next task returns **A**.\n\n```text\nadd(A) → [A]\nadd(B) → [A, B]\ntake() → A; queue = [B]\n```\n\n## Try it yourself\n\nAdd a third task and trace the order. Use the tutor to ask for an explanation or another example. Practice is optional.'});
+       await action('course_lesson',{context_id:c.context_id,job_id:c.job_id,lesson_key:key,source_ids,teaching:{outcome:'Predict the remaining queue after taking and adding tasks.',prerequisites:[],misconception:'A queue takes the oldest task first; adding a task does not move it to the front.'},practice:{kind:'explanation',prompt:'A queue contains A then B. After taking one task and adding C, what remains, and why?',criteria:['Identifies B then C as the remaining order','Explains removing the front task and appending at the back'],hints:['Trace the queue after taking A.','Append C to what remains.'],explanation:'Taking A leaves [B]. Adding C appends it at the back, leaving [B, C].'},content:'# Follow the flow\n\nThis is a simulated lesson for the development preview. In Hermes, this space contains a lesson generated from your topic, project, and permitted sources.\n\n## Work through an example\n\nA queue holds tasks in the order they arrive. Add **A**, then **B**. Taking the next task returns **A**.\n\n```text\nadd(A) → [A]\nadd(B) → [A, B]\ntake() → A; queue = [B]\n```'});
        reply='Your preview lesson is saved. Select the next lesson or ask a question to test the interface.';
       }
       if(!c.job_id){
@@ -60,9 +77,9 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
       emit('tool.complete',{tool_id:toolId,name:'learning_course_read',duration_s:0.6});
       const done={revision:Date.now(),todos:plan.todos.map(item=>({...item,status:'completed'}))};save(sid+':plan',done);emit('todo.updated',done);
       history.push({role:'assistant',text:'',reasoning:'Simulated progress: review the saved path, then prepare an example for the learner.'},{role:'tool',name:'learning_course_read',tool_call_id:toolId});
-      emit('message.delta',{text:reply});history.push({role:'assistant',text:reply});save(sid,history);timer=null;emit('message.complete',{text:reply,status:'complete'});
-     }catch(e){timer=null;emit('message.complete',{status:'error',error:e.message,text:''});}
-    },600);
+      emit('message.delta',{text:reply});history.push({role:'assistant',text:reply});save(sid,history);timers.delete(sid);emit('message.complete',{text:reply,status:'complete'});
+     }catch(e){timers.delete(sid);emit('message.complete',{status:'error',error:e.message,text:''});}
+    },600));
     return{status:'streaming'};
    }
    return{};

@@ -20,7 +20,8 @@ class AdapterTests(unittest.TestCase):
 
     def test_registration_has_no_consent_or_export_tool(self):
         class Context:
-            def __init__(self): self.tools = {}; self.commands = {}; self.skills = []
+            def __init__(self): self.tools = {}; self.commands = {}; self.skills = []; self.hooks = {}
+            def register_hook(self, name, handler): self.hooks[name] = handler
             def register_tool(self, **kw): self.tools[kw['name']] = kw
             def register_command(self, name, handler, *args, **kw): self.commands[name] = handler
             def register_skill(self, *args): self.skills.append(args)
@@ -31,11 +32,54 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(ctx.commands, {}, 'The retired command flow must not be registered')
         self.assertEqual(set(ctx.tools), {
             'learning_course_source', 'learning_course_read', 'learning_course_plan',
-            'learning_course_lesson', 'learning_course_propose', 'learning_source_read', 'learning_quote_check', 'learning_state',
+            'learning_course_lesson', 'learning_course_propose', 'learning_practice_feedback', 'learning_source_read', 'learning_quote_check', 'learning_state',
         })
         with patch.object(self.plugin.runtime, 'action', return_value={'ok': True}) as dispatch:
             ctx.tools['learning_course_read']['handler']({'track_id': 'track'})
             self.assertEqual(dispatch.call_args.kwargs['channel'], 'chat_relayed')
+        lesson_tool = ctx.tools['learning_course_lesson']
+        self.assertIn('teaching', lesson_tool['schema']['parameters']['required'])
+        self.assertIn('practice', lesson_tool['schema']['parameters']['required'])
+        with patch.object(self.plugin.runtime, 'action') as dispatch:
+            result = json.loads(lesson_tool['handler']({'context_id': 'c', 'job_id': 'j', 'lesson_key': 'one', 'content': 'Text', 'source_ids': []}))
+            self.assertIn('error', result)
+            dispatch.assert_not_called()
+        proposal_schema = ctx.tools['learning_course_propose']['schema']['parameters']
+        self.assertIn('practice', proposal_schema['properties']['lessons']['items']['required'])
+        self.assertNotIn('practice', self.plugin.runtime.parameters('course_lesson')['required'])
+
+    def test_practice_hook_blocks_execution_for_bound_and_terminal_sessions_only(self):
+        runtime = self.plugin.runtime
+        with tempfile.TemporaryDirectory() as tmp:
+            storage = types.ModuleType('plugins.plugin_storage')
+            current = [Path(tmp) / 'first']
+            current[0].mkdir()
+            storage.plugin_data_dir = lambda name: current[0]
+            with patch.dict(sys.modules, {'plugins': types.ModuleType('plugins'), 'plugins.plugin_storage': storage}):
+                class Context:
+                    def __init__(self): self.hooks = {}
+                    def register_hook(self, name, handler): self.hooks[name] = handler
+                    def register_skill(self, *args): pass
+                    def register_tool(self, **kwargs): pass
+                ctx = Context()
+                self.plugin.register(ctx)
+                self.assertIn('pre_tool_call', ctx.hooks)
+                hook = ctx.hooks['pre_tool_call']
+                # Unused profiles stay untouched by the read-only guard.
+                self.assertIsNone(hook(tool_name='terminal', session_id='ordinary'))
+                self.assertFalse((current[0] / 'data.db').exists())
+                store = runtime.Store(current[0] / 'data.db')
+                with store._connection() as db:
+                    store._put(db, 'practice_attempt', store._new(track_id='path', session_id='practice', status='completed'))
+                before = (current[0] / 'data.db').read_bytes()
+                for name in ('terminal', 'python', 'write_file', 'learning_course_lesson', 'delegate_task'):
+                    self.assertEqual(hook(tool_name=name, session_id='practice')['action'], 'block')
+                self.assertIsNone(hook(tool_name='learning_practice_feedback', session_id='practice'))
+                self.assertIsNone(hook(tool_name='terminal', session_id='tutor'))
+                self.assertEqual((current[0] / 'data.db').read_bytes(), before)
+                current[0] = Path(tmp) / 'second'
+                current[0].mkdir()
+                self.assertIsNone(hook(tool_name='terminal', session_id='practice'))
 
     def test_runtime_denies_model_consent_export_and_invalid_version(self):
         runtime = self.plugin.runtime

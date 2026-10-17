@@ -173,6 +173,9 @@ export function createWebTutorTransport(SDK, options={}) {
     async request(method,params={}) {await connect();return sendRequest(method,params);},
     async reconnect() {
       if(disposed)throw new Error('Tutor transport disposed.');
+      // Restoring another tutor must not disconnect an independent practice
+      // evaluation using this healthy gateway connection.
+      if(!terminal&&connection){await connection;return;}
       terminate(new Error('Tutor disconnected for an explicit reconnect. Previous request outcomes may be unknown.'),false);
       terminal=null;connection=null;selectedSession=null;heartbeatTimer=null;heartbeatWaiting=false;
       await connect();

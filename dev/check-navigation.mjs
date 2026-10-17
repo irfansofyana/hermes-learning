@@ -58,7 +58,7 @@ try{
  assert.equal(generated,1);
  await page.getByRole('button',{name:/03.*Navigation A third/}).click();
  await page.getByRole('button',{name:'Retry lesson generation',exact:true}).click();
- await page.locator('.lw-reading .lw-markdown').waitFor();
+ await page.locator('.lw-reading .lw-markdown').first().waitFor();
  await page.waitForFunction(()=>document.querySelector('.lw-tutor-status')?.textContent==='Ready');
  const position=await page.evaluate(async track_id=>{const r=await fetch('/api/plugins/hermes-learning/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_version:1,action:'course_read',params:{track_id}})});return (await r.json()).position.lesson_key;},tracks[0].track_id);
  assert.equal(position,'third','Retry saves the currently selected lesson position');assert.equal(generated,3);assert.deepEqual(errors,[]);

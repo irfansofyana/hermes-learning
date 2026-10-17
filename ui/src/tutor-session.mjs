@@ -1,3 +1,4 @@
+import {modelCreateParams,modelSelectionKey,branchSessionModel} from './model-options.mjs';
 import {activityText,historyReasoning,toolActivity,toolLabel,planSnapshot} from './tutor-activity.mjs';
 // The host owns conversations; Learning owns lessons and scoped generation jobs.
 const PREFIX = '[Hermes Learning context]\n';
@@ -14,11 +15,14 @@ export function tutorPrompt(text, context) {
   'Load the hermes-learning:learning-teach skill if available. Read supplied material using learning_source_read. Do not claim a link or repository was read unless retrieval succeeds. Use available host reading tools for explicitly supplied links; never execute or modify project code just to generate a lesson.',
   'For a supplied URL, report successful retrieval through learning_course_source(context_id,job_id,source_id,status:read,excerpt) or failure with status:failed and error when a generation job is active. Never mark a source read without retrieved text. Cite actual supplied source IDs through source_ids when publishing. In lesson prose refer to source titles and available locators. Distinguish your explanation from cited evidence. Metadata-only material cannot be used as lesson text.',
   'Cite external research with ordinary Markdown links [source title](https://actual-source-url) in saved lesson content and chat. Include the actual retrieved URL; never save provider citation markers or opaque search handles. Source IDs are only for material already attached to this path. A correction written in chat does not update a saved lesson; correct a rejected lesson tool call and retry before claiming publication.',
+  'Publish teaching metadata with every new lesson: teaching={outcome,prerequisites:[string],misconception}. State one observable outcome, name the prerequisites needed now (an empty list is fine), and address one likely misconception with a concrete contrast in the explanation. Calibrate depth to the saved level. The lesson content should explain why and how, demonstrate a fully worked example with expected results, and connect to the next step.',
+  'Put optional exercises in the separate practice field, not as a mandatory quiz or an answer gate in lesson content. practice={kind:explanation|code|project,prompt,criteria:[string],hints:[string],explanation}. Choose the kind that fits the outcome; criteria must assess only the taught outcome and match the reference explanation. Supply progressive hints and a complete explained solution. Keep worked examples in content; the UI renders the practice prompt, answer, hints and reveal separately. Set practice to null only when no useful exercise fits. Never demand an answer to continue learning.',
+  'For project paths, plan one coherent project with incremental milestones sharing the same domain, names, data and assumptions. Each milestone builds on a usable prior result. Before publishing, check that outcome, explanation, worked example, visual, exercise criteria and solution agree, that examples are runnable or explicitly illustrative, and that every citation supports its associated claim.',
   'For technical examples, use fenced code blocks with a language tag (python, javascript, typescript, go, json, sql, bash, yaml, html, etc.) so the lesson can highlight the code. Use proper Markdown tables, nested lists, and links. When a concept benefits from a diagram, include a real visual object in learning_course_lesson: sequence for messages between participants, state-machine for a lifecycle, or code-trace for an algorithm with line numbers and variable values. Use the tool schema or learning-teach skill examples. All lesson visual steps are explorable; do not require an answer to unlock them. Do not substitute raw Mermaid, HTML, SVG, or executable code for the supported visual object. Keep visuals and code consistent with the explanation and clearly distinguish illustrative code from executed results.',
-  'When the learner requests a lesson or roadmap change, extension, or regeneration, read learning_course_read for the latest revision, then call learning_course_propose with context_id, a stable request_id, base_revision, mode, a clear summary, optional full outline and optional lessons [{lesson_key,content,source_ids,visual}]. mode is revise, extend or regenerate. Omit unchanged lessons. Extend keeps the existing outline as an identical prefix and only adds lessons. Regenerate requires the complete replacement outline and its first complete lesson. Include the concrete requested lesson edits, not just an offer to do them. Ordinary questions must not create proposals. Proposals are not applied: tell the learner to review the preview and choose Apply changes. Never claim an update is saved before it is applied, and never silently replace their lessons. If a proposal is stale, read the latest path and propose again.',
+  'When the learner requests a lesson or roadmap change, extension, or regeneration, read learning_course_read for the latest revision, then call learning_course_propose with context_id, a stable request_id, base_revision, mode, a clear summary, optional full outline and optional lessons [{lesson_key,content,source_ids,visual,teaching,practice}]. mode is revise, extend or regenerate. Omit unchanged lessons. Extend keeps the existing outline as an identical prefix and only adds lessons. Regenerate requires the complete replacement outline and its first complete lesson. Include the concrete requested lesson edits, not just an offer to do them. Ordinary questions must not create proposals. Proposals are not applied: tell the learner to review the preview and choose Apply changes. Never claim an update is saved before it is applied, and never silently replace their lessons. If a proposal is stale, read the latest path and propose again.',
   context.job_id ? (context.lesson_key ?
-   `Generate the requested lesson ${context.lesson_key} using the saved outline. Publish it with learning_course_lesson(context_id,job_id,lesson_key,content,source_ids,visual optional). content is substantial Markdown: explain the concept, show a worked example, give an optional exercise. Do not only promise to create it.` :
-   'Generate an ordered path now. If there is no outline, call learning_course_plan(context_id,job_id,summary,assumptions,lessons). lessons is an array of {key,title,goal} with stable simple keys. Then publish the first lesson with learning_course_lesson(context_id,job_id,lesson_key,content,source_ids,visual optional). If the outline already exists, retain it and publish its first missing lesson as authorized by the job. Use project milestones for project requests. Explain and demonstrate in the first lesson; do not substitute a quiz. Save real content through the tools before saying it is ready.') :
+   `Generate the requested lesson ${context.lesson_key} using the saved outline. Publish it with learning_course_lesson(context_id,job_id,lesson_key,content,source_ids,teaching,practice object or null,visual optional). content is substantial Markdown: explain the concept and show a worked example; attach any exercise as separate practice. Do not only promise to create it.` :
+   'Generate an ordered path now. If there is no outline, call learning_course_plan(context_id,job_id,summary,assumptions,lessons). lessons is an array of {key,title,goal} with stable simple keys. Then publish the first lesson with learning_course_lesson(context_id,job_id,lesson_key,content,source_ids,teaching,practice object or null,visual optional). If the outline already exists, retain it and publish its first missing lesson as authorized by the job. Use project milestones for project requests. Explain and demonstrate in the first lesson; do not substitute a quiz. Save real content through the tools before saying it is ready.') :
    'Answer the learner in this conversation using the selected lesson. Read learning_course_read(track_id) for saved content and its current revision when needed. When a change is requested, use learning_course_propose and let the learner review and apply it inside Learning. A chat question alone does not change the path.',
   'If a required tool is unavailable or a save fails, report the failure clearly. Never claim a lesson was saved based only on prose. Tool/source errors are not reasons to invent content or references.'
  ].join('\n');
@@ -39,7 +43,7 @@ export function visibleHistory(messages=[]) {
 export class TutorSession {
  constructor({transport,request,scope,profile,onState=()=>{},onChange=()=>{},pollMs=2500}) {
   Object.assign(this,{transport,request,scope,profile,onState,onChange,pollMs});
-  this.epoch=0;this.runtime=null;this.binding=null;this.context=null;this.uncertain=false;this.disposed=false;this.polling=false;this.preparing=false;
+  this.epoch=0;this.appliedModel=undefined;this.modelBranch=null;this.runtime=null;this.binding=null;this.context=null;this.uncertain=false;this.disposed=false;this.polling=false;this.preparing=false;
   this.state={messages:[],busy:false,status:'Ready',error:'',pending:null,plan:null};
   this.unsub=[];
   for(const type of ['message.start','message.delta','message.interim','message.complete','error','tool.start','tool.complete','tool.generating','reasoning.delta','reasoning.available','thinking.delta','status.update','todo.updated','approval','clarify','request.cancel','transport.disconnected'])
@@ -50,7 +54,7 @@ export class TutorSession {
  params(values){return {...(this.profile?{profile:this.profile}:{}),...values};}
  action(action,params){return this.request('/action',{api_version:1,action,params});}
  valid(epoch){return !this.disposed&&epoch===this.epoch;}
- clear(){this.epoch++;this.runtime=null;this.binding=null;this.context=null;this.preparing=false;this.finishing=null;this.streamId=null;this.reasoningId=null;this.uncertain=false;this.transport?.setSession?.(null);this.patch({messages:[],busy:false,status:'Ready',error:'',pending:null,plan:null});}
+ clear(){this.epoch++;this.appliedModel=undefined;this.modelBranch=null;this.runtime=null;this.binding=null;this.context=null;this.preparing=false;this.finishing=null;this.streamId=null;this.reasoningId=null;this.uncertain=false;this.transport?.setSession?.(null);this.patch({messages:[],busy:false,status:'Ready',error:'',pending:null,plan:null});}
  async restore(binding,context={}) {
   if(this.disposed)throw Error('This tutor is closed.');
   this.clear();this.context=context;
@@ -63,6 +67,7 @@ export class TutorSession {
    const result=await this.transport.request('session.resume',this.params({session_id:binding.session_id,inline_images:false}));
    if(!this.valid(epoch))return;
    if(!result.session_id)throw Error('Hermes did not return a conversation.');
+   this.appliedModel=Object.hasOwn(binding,'model')?modelSelectionKey(binding.model):undefined;
    this.runtime=result.session_id;this.binding={...binding,session_id:result.stored_session_id||binding.session_id};this.transport.setSession?.(this.runtime);
    this.updatePlan(result.todo_state);
    this.patch({messages:visibleHistory(result.messages),busy:!!result.running,status:result.running?'Tutor is working':'Ready'});
@@ -89,10 +94,20 @@ export class TutorSession {
   let submitted=false;
   try{
    if(!this.runtime){
-    const created=await this.transport.request('session.create',this.params({title:`Learning: ${context.course?.track?.title||'Study'}`,close_on_disconnect:false,idempotency_key:`learning-${context.track_id}-${id()}`}));
+    const created=await this.transport.request('session.create',this.params({...modelCreateParams(context.course?.model),title:`Learning: ${context.course?.track?.title||'Study'}`,close_on_disconnect:false,idempotency_key:`learning-${context.track_id}-${id()}`}));
     if(!this.valid(epoch))return;
     if(!created.session_id||!created.stored_session_id)throw Error('Hermes did not return a durable conversation.');
-    this.runtime=created.session_id;this.binding={session_id:created.stored_session_id,scope:this.scope};this.transport.setSession?.(this.runtime);
+    this.appliedModel=modelSelectionKey(context.course?.model);
+    this.runtime=created.session_id;this.binding={session_id:created.stored_session_id,scope:this.scope,model:context.course?.model==null?null:modelCreateParams(context.course.model)};this.transport.setSession?.(this.runtime);
+   }
+   const selectedModel=modelSelectionKey(context.course?.model);
+   if(this.appliedModel!==selectedModel){
+    if(this.modelBranch?.selection!==selectedModel||this.modelBranch?.parent!==this.binding.session_id)
+     this.modelBranch={selection:selectedModel,parent:this.binding.session_id,key:`learning-model-${id()}`};
+    const branched=await branchSessionModel(this.transport,this.profile,this.runtime,this.binding.session_id,context.course?.model,{isCurrent:()=>this.valid(epoch),idempotencyKey:this.modelBranch.key});
+    if(!this.valid(epoch))return;
+    this.runtime=branched.session_id;this.binding={session_id:branched.stored_session_id,scope:this.scope,model:context.course?.model==null?null:modelCreateParams(context.course.model)};this.transport.setSession?.(this.runtime);
+    this.appliedModel=selectedModel;this.modelBranch=null;
    }
    await this.action('course_bind',{context_id:context.context_id,...this.binding});
    if(!this.valid(epoch))return;

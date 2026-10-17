@@ -2,6 +2,7 @@ name: hermes-learning
 version: "0.1.0"
 description: "Turn topics, projects, and your own sources into lessons with a tutor inside Learning."
 provides_tools:
+  - learning_practice_feedback
   - learning_course_source
   - learning_course_read
   - learning_course_propose

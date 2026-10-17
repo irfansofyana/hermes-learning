@@ -84,20 +84,30 @@ SPECS['activity_revision'] = ({**SPECS['activity'][0], 'activity_id': ID}, [*SPE
 
 MATERIAL = object_schema({'title': string(300), 'kind': string(100), 'url': string(2000, 0), 'locator': string(2000, 0), 'excerpt': string(50000, 0), 'sharing': enum('metadata-only', 'selected-excerpts', 'full-text')}, ['title', 'kind', 'sharing'])
 LESSON_OUTLINE = object_schema({'key': string(80), 'title': string(300), 'goal': string(2000)}, ['key', 'title', 'goal'])
-PROPOSED_LESSON = object_schema({'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL}, ['lesson_key', 'content', 'source_ids'])
+TEACHING = object_schema({'outcome': string(2000), 'prerequisites': array(string(1000), 20), 'misconception': string(2000)}, ['outcome', 'prerequisites', 'misconception'])
+PRACTICE = object_schema({'kind': enum('explanation', 'code', 'project'), 'prompt': string(12000), 'criteria': {**array(string(2000), 20), 'minItems': 1}, 'hints': array(string(5000), 5), 'explanation': string(12000)}, ['kind', 'prompt', 'criteria', 'hints', 'explanation'])
+LESSON_DETAILS = {'teaching': TEACHING, 'practice': {'anyOf': [{'type': 'null'}, PRACTICE]}}
+MODEL_SELECTION = {'anyOf': [{'type': 'null'}, object_schema({'provider': string(200), 'model': string(300)}, ['provider', 'model'])]}
+PROPOSED_LESSON = object_schema({'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL, **LESSON_DETAILS}, ['lesson_key', 'content', 'source_ids'])
 SPECS.update({
+    'course_model': ({**CONTEXT, 'selection': MODEL_SELECTION}, ['context_id', 'selection']),
+    'practice_read': ({**CONTEXT, 'lesson_key': string(80)}, ['context_id', 'lesson_key']),
+    'practice_submit': ({**CONTEXT, 'lesson_key': string(80), 'lesson_version': {'type': 'integer', 'minimum': 1}, 'request_id': ID, 'answer': string(30000), 'hints_used': {'type': 'integer', 'minimum': 0, 'maximum': 5}, 'explanation_shown': {'type': 'boolean'}}, ['context_id', 'lesson_key', 'lesson_version', 'request_id', 'answer', 'hints_used', 'explanation_shown']),
+    'practice_bind': ({**CONTEXT, 'attempt_id': ID, 'session_id': string(200), 'scope': string(2000)}, ['context_id', 'attempt_id', 'session_id', 'scope']),
+    'practice_status': ({**CONTEXT, 'attempt_id': ID, 'status': enum('failed', 'stopped'), 'error': string(2000, 0)}, ['context_id', 'attempt_id', 'status']),
+    'practice_feedback': ({'attempt_id': ID, 'evaluation_token': string(100), 'outcome': enum('correct', 'partial', 'retry'), 'feedback': string(12000)}, ['attempt_id', 'evaluation_token', 'outcome', 'feedback']),
     'course_propose': ({**CONTEXT, 'request_id': ID, 'base_revision': {'type': 'integer', 'minimum': 1}, 'mode': enum('revise', 'extend', 'regenerate'), 'summary': string(12000), 'outline': array(LESSON_OUTLINE, 50), 'lessons': array(PROPOSED_LESSON, 50)}, ['context_id', 'request_id', 'base_revision', 'mode', 'summary']),
     'course_apply': ({**CONTEXT, 'proposal_id': ID}, ['context_id', 'proposal_id']),
     'course_dismiss': ({**CONTEXT, 'proposal_id': ID}, ['context_id', 'proposal_id']),
     'course_source': ({**CONTEXT, 'job_id': ID, 'source_id': ID, 'status': enum('read', 'failed', 'unsupported'), 'excerpt': string(50000, 0), 'error': string(2000, 0)}, ['context_id', 'job_id', 'source_id', 'status']),
-    'course_start': ({'request_id': ID, 'title': string(300), 'interest': string(12000), 'intent': enum('topic', 'project', 'sources'), 'level': enum('beginner', 'intermediate', 'advanced'), 'materials': array(MATERIAL, 20)}, ['request_id', 'title', 'intent', 'level', 'materials']),
+    'course_start': ({'request_id': ID, 'title': string(300), 'interest': string(12000), 'intent': enum('topic', 'project', 'sources'), 'level': enum('beginner', 'intermediate', 'advanced'), 'materials': array(MATERIAL, 20), 'model': MODEL_SELECTION}, ['request_id', 'title', 'intent', 'level', 'materials']),
     'course_open': ({'track_id': ID}, ['track_id']),
     'course_read': ({'track_id': ID}, ['track_id']),
     'course_generate': ({**CONTEXT, 'request_id': ID, 'lesson_key': string(80)}, ['context_id', 'request_id']),
-    'course_bind': ({**CONTEXT, 'session_id': string(200), 'scope': string(2000)}, ['context_id', 'session_id', 'scope']),
+    'course_bind': ({**CONTEXT, 'session_id': string(200), 'scope': string(2000), 'model': MODEL_SELECTION}, ['context_id', 'session_id', 'scope']),
     'course_position': ({**CONTEXT, 'lesson_key': string(80), 'completed': array(string(80), 50)}, ['context_id', 'lesson_key']),
     'course_plan': ({**CONTEXT, 'job_id': ID, 'summary': string(12000), 'assumptions': array(string(1000), 30), 'lessons': array(LESSON_OUTLINE, 50)}, ['context_id', 'job_id', 'summary', 'assumptions', 'lessons']),
-    'course_lesson': ({**CONTEXT, 'job_id': ID, 'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL}, ['context_id', 'job_id', 'lesson_key', 'content', 'source_ids']),
+    'course_lesson': ({**CONTEXT, 'job_id': ID, 'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL, **LESSON_DETAILS}, ['context_id', 'job_id', 'lesson_key', 'content', 'source_ids']),
     'course_job_status': ({**CONTEXT, 'job_id': ID, 'status': enum('stopped', 'failed'), 'error': string(2000, 0)}, ['context_id', 'job_id', 'status']),
 })
 
@@ -118,7 +128,7 @@ def _validate(value, schema, label='params'):
         raise LearningError(f'{label} does not match a supported shape')
     kind = schema['type']
     valid = {'object': type(value) is dict, 'string': type(value) is str,
-             'array': type(value) is list, 'integer': type(value) is int, 'null': value is None}[kind]
+             'boolean': type(value) is bool, 'array': type(value) is list, 'integer': type(value) is int, 'null': value is None}[kind]
     if not valid:
         raise LearningError(f'{label} must be {kind}')
     if kind == 'object' and 'properties' in schema:
@@ -131,7 +141,7 @@ def _validate(value, schema, label='params'):
     if kind == 'string' and not schema.get('minLength', 0) <= len(value) <= schema.get('maxLength', 100000):
         raise LearningError(f'{label} length is outside supported limits')
     if kind == 'array':
-        if len(value) > schema['maxItems']:
+        if not schema.get('minItems', 0) <= len(value) <= schema['maxItems']:
             raise LearningError(f'{label} contains too many items')
         for item in value:
             _validate(item, schema['items'], label)
@@ -146,6 +156,11 @@ def store():
     return Store(plugin_data_dir('hermes-learning') / 'data.db')
 
 
+def practice_session(session_id):
+    from plugins.plugin_storage import plugin_data_dir
+    return Store.is_practice_session(plugin_data_dir('hermes-learning') / 'data.db', session_id)
+
+
 def action(name, params, *, channel='ui_direct', api_version=1):
     if type(api_version) is not int or api_version != 1:
         raise LearningError('Unsupported learning API version; reload compatible clients')
@@ -153,7 +168,7 @@ def action(name, params, *, channel='ui_direct', api_version=1):
         raise LearningError('Unsupported adapter channel')
     if not isinstance(name, str) or name not in SPECS:
         raise LearningError('Unknown learning action')
-    if channel == 'chat_relayed' and name in ('course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
+    if channel == 'chat_relayed' and name in ('course_model', 'practice_read', 'practice_submit', 'practice_bind', 'practice_status', 'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
         raise LearningError('This action requires the human workspace or explicit slash command')
     _validate(params, parameters(name))
     try:

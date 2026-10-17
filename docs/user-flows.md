@@ -79,3 +79,16 @@ Educational chat outside Learning remains ordinary chat. Open Learning to create
 | Reading and ordinary tutor chat | No automatic assessment, mastery claim, or practice attempt |
 
 The labelled development preview exercises these UI and persistence flows with simulated responses. It does not establish real-model teaching quality or host gateway compatibility.
+
+
+## Practice inside a lesson
+
+New lessons include a learning outcome, prerequisite note, worked example, and optional practice. Write an explanation or paste code/results into the exercise answer box, then choose **Check answer**. A separate evaluator compares the answer with the lesson’s criteria and shows **Correct**, **Partly correct**, or **Needs another try** inline. Hints and the full explanation are available without submitting. **Skip** never blocks navigation or reading progress.
+
+Feedback preserves the submitted answer even if you edit the draft while waiting. **Try again** keeps the previous attempt in history. **Ask tutor about this** prepares a chat draft containing the exercise, your answer, and feedback; you choose when to send it. Ordinary chat is never silently recorded as practice.
+
+You can browse lessons while an answer is checked. A draft is kept on the device, and submitted attempts survive reload on the backend. Reopen an unfinished exercise and choose **Reconnect answer check** to reconnect and inspect its saved session without resubmitting the answer. Failed checks preserve the answer. Rewritten lessons have a new version and fresh practice state.
+
+## Choosing a model
+
+Use **Model** when creating a path or in its tutor panel. The selection applies to subsequent lessons, tutor replies, and practice checks for that path. Only models configured in the connected Hermes profile are offered. A busy response finishes with the model it started with; the picker is disabled while that path has active work. Different users see their own configured providers, and credentials stay in Hermes. Model changes preserve the conversation and do not change the global Hermes default.

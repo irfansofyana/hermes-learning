@@ -177,3 +177,13 @@ test('late authentication from an expired connection cannot replace an explicitl
   resolves[0]('wss://host/api/ws?ticket=expired');await tick();
   assert.equal(Socket.instances.length,1);assert.equal(socket.url,'wss://host/api/ws?ticket=new');transport.dispose();
 });
+
+test('restoring a tutor preserves a healthy shared connection carrying practice',async()=>{
+ const {transport}=web();const socket=await connected(transport);
+ const pending=transport.request('session.activate',{session_id:'practice-runtime'});
+ await tick();const frame=socket.sent.at(-1);
+ await transport.reconnect();
+ assert.equal(Socket.instances.length,1);assert.equal(socket.readyState,1);
+ socket.reply(frame,{running:true});assert.deepEqual(await pending,{running:true});
+ transport.dispose();
+});

@@ -1,6 +1,6 @@
 # Teaching quality and Humanizer integration
 
-Status: required product direction. The isolated spike bundles an original Humanizer-compatible teaching adaptation; host registration and skill retrieval are exercised, while model adherence remains unevaluated. R11 owns release acceptance. No daily/production installation is implied by this document.
+The plugin bundles its own teaching and clear-prose skills. Generation prompts include the essential lesson rules directly and ask the model to load the skills when available. Structured payload validation and simulated UI tests verify contracts; they do not establish model adherence, factual accuracy, or learning effectiveness.
 
 ## Integration contract
 
@@ -44,7 +44,7 @@ Weak feedback:
 Preferred feedback:
 > You assumed the first request failed because the client timed out. The server may already have completed it. Trace what a retry would do in that case.
 
-An explanation should not always end with a quiz. If the learner chooses practice, make the question explicit and accept a normal chat answer. The system handles saving and reports its result; the learner does not confirm that a backend write happened.
+New lessons offer one small optional practice task aligned with the lesson outcome. It has its own answer and feedback area inside the lesson, separate from tutor chat. Learners can skip, use hints, reveal the explanation, retry, or explicitly bring the exercise into chat. A chat answer is not silently saved as an assessed attempt. Reading and assisted completion are not evidence of independent mastery.
 
 ## Review checklist
 
@@ -53,7 +53,7 @@ An explanation should not always end with a quiz. If the learner chooses practic
 - Are assumptions, uncertainty, and important limits intact?
 - Were all technical tokens, quotations, units, equations, and references preserved?
 - Does feedback address a specific reasoning error without empty praise?
-- Is a question or exercise useful and agreed, rather than mechanically appended?
+- Does the optional exercise apply the lesson outcome, with criteria and a reference explanation that agree with the worked example?
 - Is the explanation readable at the requested depth without padded sections?
 - Did editing preserve source boundaries, consent, and structured learning state?
 

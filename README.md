@@ -10,12 +10,14 @@ A personal learning workspace for [Hermes Agent](https://github.com/NousResearch
 - **Bring your own material.** Attach multiple text, Markdown, or code files, or add source and repository links. Each source shows whether its text is available or retrieval failed.
 - **Read and ask in one place.** Follow lessons with formatted Markdown, tables, highlighted code you can copy, and step-by-step sequence diagrams, state machines, or code traces. Ask for a simpler explanation or another example beside the lesson.
 - **Change a saved path.** Ask the tutor to rewrite a lesson, adjust the roadmap, add lessons, or regenerate the path. Review the summary and preview, then choose **Apply changes** or dismiss it. Ordinary questions leave saved lessons unchanged.
+- **Practice inside the lesson.** Try an explanation, code task, or project step. Check your answer for inline feedback, use hints, reveal the explanation, or skip. Bring an exercise to tutor chat when you want to discuss it.
+- **Choose your model.** Select a configured Hermes model for a path’s lessons, tutor, and practice feedback, or follow the profile default.
 - **Follow the tutor’s work.** See exposed thinking, tool activity, and plan progress inside the chat. Expand the panel for more room.
 - **Continue later.** Reopen your last lesson and its tutor conversation. Generate later lessons when you select them.
 
 Updates keep your sources and tutor conversation. Unchanged lessons keep their read markers; rewritten lessons clear theirs, and regeneration resets reading progress.
 
-The tutor uses your configured Hermes model and credentials. Generating a path saves your request and supplied material and sends shared material to that model. Opening Learning alone does not start a model turn. Read markers help you return to a lesson; practice and questions stay in the tutor conversation.
+The tutor uses your configured Hermes model and credentials. Generating a path saves your request and supplied material and sends shared material to that model. Opening Learning alone does not start a model turn. Read markers help you return to a lesson. Optional practice has its own answer and feedback area; it does not add messages to tutor chat or count as mastery.
 
 ## Install
 
@@ -25,7 +27,7 @@ In Hermes Desktop, open **Install plugin** and paste:
 https://github.com/irfansofyana/hermes-learning
 ```
 
-Enable Learning under **Capabilities → Plugins → Desktop**. The connected Hermes backend also needs the agent component enabled. Built UI files are included on `main`, so no build is needed to install.
+Enable Learning under **Capabilities → Plugins → Desktop**. The connected Hermes backend also needs the matching agent component enabled. Update both installations when upgrading, and restart the backend dashboard/API process after backend changes. Built UI files are included on `main`, so no build is needed to install.
 
 For a remote backend, install there too, then restart its dashboard/API server:
 
