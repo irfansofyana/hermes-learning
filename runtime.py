@@ -90,6 +90,8 @@ LESSON_DETAILS = {'teaching': TEACHING, 'practice': {'anyOf': [{'type': 'null'},
 MODEL_SELECTION = {'anyOf': [{'type': 'null'}, object_schema({'provider': string(200), 'model': string(300)}, ['provider', 'model'])]}
 PROPOSED_LESSON = object_schema({'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL, **LESSON_DETAILS}, ['lesson_key', 'content', 'source_ids'])
 SPECS.update({
+    'course_context': ({**CONTEXT, 'lesson_key': string(80)}, ['context_id']),
+    'course_continuity_keep': ({**CONTEXT, 'lesson_key': string(80), 'warning_id': ID, 'expected_revision': {'type': 'integer', 'minimum': 1}}, ['context_id', 'lesson_key', 'expected_revision', 'warning_id']),
     'course_asset_import': ({**CONTEXT, 'path': string(4000), 'title': string(300)}, ['context_id', 'path', 'title']),
     'course_asset_read': ({'track_id': ID, 'asset_id': ID}, ['track_id', 'asset_id']),
     'course_diagram_render': ({**CONTEXT, 'source': string(50000)}, ['context_id', 'source']),
@@ -171,7 +173,7 @@ def action(name, params, *, channel='ui_direct', api_version=1):
         raise LearningError('Unsupported adapter channel')
     if not isinstance(name, str) or name not in SPECS:
         raise LearningError('Unknown learning action')
-    if channel == 'chat_relayed' and name in ('course_asset_read', 'course_model', 'practice_read', 'practice_submit', 'practice_bind', 'practice_status', 'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
+    if channel == 'chat_relayed' and name in ('course_continuity_keep', 'course_asset_read', 'course_model', 'practice_read', 'practice_submit', 'practice_bind', 'practice_status', 'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status', 'start', 'resume', 'approve', 'recommendation_decide', 'track_status', 'review', 'export'):
         raise LearningError('This action requires the human workspace or explicit slash command')
     _validate(params, parameters(name))
     try:

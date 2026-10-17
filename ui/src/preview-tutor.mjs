@@ -64,7 +64,7 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
          const key='worker-'+suffix;outline=[...outline,{key,title:'Build a retry-safe worker',goal:'Implement retries without duplicating effects.'}];lessons=[{lesson_key:key,content,source_ids:sources}];summary='Extend the path with a retry-safe worker project and its first lesson.';
         }else if(mode==='regenerate'){
          outline=[{key:'new-start-'+suffix,title:'Rebuild from a concrete example',goal:'Understand queues through a runnable project.'},{key:'failure-'+suffix,title:'Practice with failures',goal:'Handle worker failures and retries.'}];lessons=[{lesson_key:outline[0].key,content,source_ids:sources}];summary='Replace the roadmap with a practical project path and a new first lesson.';
-        }else if(c.change_request?.target==='path'||text.includes('roadmap')){
+        }else if(c.change_request?.target==='path'||(!c.change_request&&text.includes('roadmap'))){
          outline=outline.map((item,index)=>index===outline.length-1?{...item,title:'Build a reliable worker',goal:'Practise retries and failure handling.'}:item);summary='Make the next roadmap milestone more practical.';
         }else{
          const key=c.change_request?.lesson_key||c.lesson_key||outline[0].key;lessons=[{lesson_key:key,content,source_ids:sources}];

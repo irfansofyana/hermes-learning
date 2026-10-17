@@ -27,10 +27,10 @@ _media_spec.loader.exec_module(_media)
 API_VERSION = SCHEMA_VERSION = 1
 LEVELS = ['none', 'nudge', 'targeted-hint', 'worked-step', 'full-solution-shown']
 OUTCOMES = ['needs-work', 'developing', 'demonstrated']
-CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1', 'lesson-media-v1']
+CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1', 'lesson-media-v1', 'lesson-continuity-v1']
 WITHHELD = 'Content withheld by source-sharing policy.'
-READS = {'course_asset_read', 'course_diagram_render', 'practice_read', 'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
-WRITES = {'course_asset_import', 'course_model', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback', 'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
+READS = {'course_context', 'course_asset_read', 'course_diagram_render', 'practice_read', 'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
+WRITES = {'course_continuity_keep', 'course_asset_import', 'course_model', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback', 'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
 KINDS = ('track', 'source', 'activity', 'attempt', 'assessment', 'review', 'dispute', 'help', 'run', 'context', 'recommendation')
 
 
@@ -664,6 +664,78 @@ class Store:
     def _lesson_view(self, lesson):
         return {**lesson, 'visual': self._lesson_visual(lesson.get('visual'))}
 
+    @staticmethod
+    def _continuity_text(value):
+        # Ignore presentation-only Markdown/spacing changes, but keep fenced code exact.
+        parts = re.split(r'(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)', value or '')
+        return ''.join(part if part.startswith(('`', '~~~')) else re.sub(r'\s+', ' ', re.sub(r'(?m)^\s{0,3}#{1,6}\s+', '', re.sub(r'\*\*([^*]+)\*\*', r'\1', part))).strip() for part in parts)
+
+    def _continuity_after_update(self, course, old, proposal):
+        if proposal['mode'] == 'regenerate':
+            return {}
+        outline, previous = proposal['outline'], course['outline']
+        replaced = {item['lesson_key']: item for item in proposal['lessons']}
+        flags = {key: value for key, value in course.get('continuity_flags', {}).items()
+                 if key in {item['key'] for item in outline} and key not in replaced}
+        old_keys, new_keys = [i['key'] for i in previous], [i['key'] for i in outline]
+        changed = {}
+        for item in previous:
+            key = item['key']
+            after = next((v for v in outline if v['key'] == key), None)
+            if after is None or any(self._continuity_text(item[f]) != self._continuity_text(after[f]) for f in ('title', 'goal')):
+                changed[key] = item['title']
+            if key in old and key in replaced:
+                before, replacement = old[key], replaced[key]
+                if (self._continuity_text(before['content']) != self._continuity_text(replacement['content']) or
+                    any(before.get(f) != replacement.get(f) for f in ('visual', 'teaching', 'practice', 'source_ids'))):
+                    changed[key] = item['title']
+        for index, item in enumerate(outline):
+            key = item['key']
+            if key not in old or key in replaced:
+                continue
+            old_before = old_keys[:old_keys.index(key)] if key in old_keys else []
+            new_before = new_keys[:index]
+            causes = [{'lesson_key': k, 'title': title} for k, title in changed.items() if k in old_before or k in new_before or k == key]
+            if old_before != new_before:
+                causes.append({'lesson_key': '', 'title': 'Earlier roadmap order or prerequisites'})
+            if causes:
+                prior = flags.get(key, {}).get('causes', [])
+                merged = {c['lesson_key']: c for c in prior + causes}
+                flags[key] = {'warning_id': str(uuid.uuid4()), 'revision': course.get('revision', 1) + 1, 'causes': list(merged.values()),
+                              'reason': 'Earlier lesson content or the roadmap changed. Check that this lesson still fits.'}
+        return flags
+
+    def _continuity_context(self, db, context, key):
+        # Even UI requests receive the model-safe projection; never forward the human view.
+        course = self._course_dispatch(db, 'course_read', {'track_id': context['track_id']}, 'chat_relayed')
+        outline = course['outline']
+        target = key or (outline[0]['key'] if outline else None)
+        if target is not None and target not in {item['key'] for item in outline}:
+            fail('Lesson must belong to this path')
+        index = next((i for i, item in enumerate(outline) if item['key'] == target), 0)
+        saved = {l['key']: l for l in course['lessons']}
+        flags = course.get('continuity_flags', {})
+        budget, earlier = 24000, []
+        for item in reversed(outline[:index]):
+            lesson = saved.get(item['key'])
+            if not lesson:
+                continue
+            body = lesson['content']; excerpt = body[:min(8000, budget)]; budget -= len(excerpt)
+            earlier.append({'key': item['key'], 'title': item['title'], 'version': lesson.get('version', 1),
+                            'content': excerpt, 'truncated': len(excerpt) < len(body),
+                            'content_withheld': bool(lesson.get('content_withheld')),
+                            'outcome': (lesson.get('teaching') or {}).get('outcome', '')[:500],
+                            'may_need_update': item['key'] in flags})
+        selected = saved.get(target)
+        if selected:
+            selected = {k: selected.get(k) for k in ('key', 'title', 'version', 'content', 'content_withheld')}
+            selected['truncated'] = len(selected['content']) > 12000
+            selected['content'] = selected['content'][:12000]
+        return {'revision': course['revision'], 'outline': outline, 'lesson_key': target,
+                'earlier_lessons': list(reversed(earlier)), 'selected_lesson': selected,
+                'missing_earlier_lessons': [item['key'] for item in outline[:index] if item['key'] not in saved],
+                'update_flag': flags.get(target), 'content_trust': 'untrusted-lesson-material'}
+
     def _course_job_view(self, job):
         return {key: value for key, value in job.items() if key not in ('context_id', 'request_hash')}
 
@@ -795,6 +867,7 @@ class Store:
 
         # Acceptance is guarded and serialized by dispatch's BEGIN IMMEDIATE.
         old = {item['key']: item for item in self._all(db, 'lesson', tid)}
+        course['continuity_flags'] = self._continuity_after_update(course, old, proposal)
         versions = dict(course.get('lesson_versions', {}))
         versions.update({key: lesson.get('version', 1) for key, lesson in old.items()})
         replacements = {item['lesson_key']: item for item in proposal['lessons']}
@@ -868,7 +941,7 @@ class Store:
 
     def _course_dispatch(self, db, action, p, channel):
         now = iso(self.clock())
-        ui_actions = {'course_model', 'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
+        ui_actions = {'course_continuity_keep', 'course_model', 'course_apply', 'course_dismiss', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_job_status'}
         if action in ui_actions and channel != 'ui_direct':
             fail('This course action requires the human workspace', 'explicit_entry_required', 403)
         if action == 'course_read':
@@ -879,7 +952,7 @@ class Store:
             for lesson in lessons:
                 if channel == 'chat_relayed' and any(self._get(db, 'source', sid, tid)['sharing'] == 'metadata-only' for sid in lesson['source_ids']):
                     lesson.update(content=WITHHELD, title='Lesson with restricted source', visual=None, teaching=None, practice=None, content_withheld=True)
-            return {'track': self._track_view(track), 'outline': course.get('outline', []),
+            return {'capabilities': CAPABILITIES, 'continuity_flags': course.get('continuity_flags', {}), 'track': self._track_view(track), 'outline': course.get('outline', []),
                     'revision': course.get('revision', 1), 'model': course.get('model'),
                     'proposals': [self._course_proposal_view(db, item, channel) for item in self._all(db, 'course_proposal', tid)],
                     'lessons': lessons, 'position': course.get('position', {'lesson_key': None, 'completed': []}),
@@ -957,6 +1030,21 @@ class Store:
             course = self._new(track_id=tid, outline=[], summary='', assumptions=[], binding=None,
                                position={'lesson_key': None, 'completed': []}, created_at=now)
             self._put(db, 'course', course)
+        if action == 'course_context':
+            return self._continuity_context(db, context, p.get('lesson_key'))
+        if action == 'course_continuity_keep':
+            if p.get('expected_revision') != course.get('revision', 1):
+                fail('This path changed. Reload before keeping the current lesson.', 'revision_conflict', 409)
+            key = p.get('lesson_key')
+            if not any(l['key'] == key for l in self._all(db, 'lesson', tid)):
+                fail('Choose a saved lesson')
+            flags = dict(course.get('continuity_flags', {}))
+            if key in flags and p.get('warning_id') != flags[key].get('warning_id'):
+                fail('The continuity warning changed. Reload before keeping this lesson.', 'revision_conflict', 409)
+            flags.pop(key, None)
+            course['continuity_flags'] = flags
+            self._put(db, 'course', course, True)
+            return {'continuity_flags': flags}
         if action == 'course_model':
             course['model'] = self._course_model(p.get('selection'))
             self._put(db, 'course', course, True)
@@ -1115,12 +1203,24 @@ class Store:
                 return {'lesson': saved}
             if job['status'] not in ('queued', 'generating'):
                 fail('Generation job has ended; explicitly generate again', 'job_closed', 409)
+            versions_now = {l['key']: l.get('version', 1) for l in self._all(db, 'lesson', tid)}
+            if any(versions_now.get(k, 0) != v for k, v in job.get('prior_versions', {}).items()):
+                fail('An earlier lesson changed during generation. Retry with the latest context.', 'revision_conflict', 409)
             if any(lesson['key'] == key for lesson in self._all(db, 'lesson', tid)):
                 fail('Lesson is already published', 'revision_conflict', 409)
             versions = dict(course.get('lesson_versions', {}))
             versions[key] = versions.get(key, 0) + 1
             lesson = self._new(track_id=tid, **publication, version=versions[key], job_id=job['id'], created_at=now)
             self._put(db, 'lesson', lesson)
+            order = [entry['key'] for entry in course['outline']]
+            flags = dict(course.get('continuity_flags', {}))
+            for later in self._all(db, 'lesson', tid):
+                if order.index(later['key']) > order.index(key):
+                    causes = {c['lesson_key']: c for c in flags.get(later['key'], {}).get('causes', [])}
+                    causes[key] = {'lesson_key': key, 'title': item['title']}
+                    flags[later['key']] = {'warning_id': str(uuid.uuid4()), 'revision': course.get('revision', 1), 'causes': list(causes.values()),
+                                           'reason': 'An earlier lesson was generated after this lesson. Check that they fit.'}
+            course['continuity_flags'] = flags
             job.update(status='completed', lesson_hash=digest, lesson_id=lesson['id'], updated_at=now)
             self._put(db, 'course_job', job, True)
             course['lesson_versions'] = versions
@@ -1137,6 +1237,11 @@ class Store:
                         base_revision=course.get('revision', 1) if course else 1,
                         requested_lesson_key=lesson_key, lesson_key=lesson_key or (outline[0]['key'] if outline else None),
                         allow_outline=lesson_key is None and not outline, status='queued', error='', created_at=now, updated_at=now)
+        keys = [i['key'] for i in outline]
+        if job['lesson_key'] in keys:
+            earlier = keys[:keys.index(job['lesson_key'])]
+            versions = {l['key']: l.get('version', 1) for l in self._all(db, 'lesson', track['id'])}
+            job['prior_versions'] = {key: versions.get(key, 0) for key in earlier}
         self._put(db, 'course_job', job)
         return job
 

@@ -1,0 +1,41 @@
+// Real store plus simulated tutor. Seed using dev/seed-continuity.py.
+import assert from 'node:assert/strict';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const base=process.env.LEARNING_PREVIEW_URL||'http://127.0.0.1:8899';
+const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true,args:process.env.LEARNING_BROWSER_NO_SANDBOX==='1'?['--no-sandbox']:[]});
+const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+page.on('pageerror',e=>errors.push(e.message));
+const api=(action,params)=>page.evaluate(async({action,params})=>{const r=await fetch('/api/plugins/hermes-learning/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,params,api_version:1})});const data=await r.json();if(!r.ok)throw Error(JSON.stringify(data));return data;},{action,params});
+try{
+ await page.goto(base);await page.getByRole('button',{name:/Connected Kafka lessons/}).click();
+ const state=await page.evaluate(()=>fetch('/api/plugins/hermes-learning/state').then(r=>r.json()));const track=state.tracks.find(t=>t.title==='Connected Kafka lessons');
+ const read=()=>api('course_read',{track_id:track.id});
+ const opened=await api('course_open',{track_id:track.id}),context_id=opened.context_id;
+ const notice=page.getByRole('complementary',{name:'Lesson continuity'});await notice.waitFor();
+ assert.match(await notice.innerText(),/Events and topics/);
+ assert.match(await page.locator('.lw-reading .lw-markdown').innerText(),/orders topic/);
+ await page.screenshot({animations:'disabled',path:'/tmp/learning-continuity-desktop.png'});
+ await notice.getByRole('button',{name:'Keep current lesson',exact:true}).click();await notice.waitFor({state:'detached'});
+ await page.reload();await page.getByRole('button',{name:/Connected Kafka lessons/}).click();
+ assert.deepEqual((await read()).continuity_flags,{});
+ assert.ok((await read()).position.completed.includes('two'));
+ const p=await api('course_propose',{context_id,request_id:'another-foundation',base_revision:2,mode:'revise',summary:'Group payments by account.',lessons:[{lesson_key:'one',content:'Publish payments using account_id as the partition key.',source_ids:[]}]});
+ await api('course_apply',{context_id,proposal_id:p.proposal.id});
+ await page.reload();await page.getByRole('button',{name:/Connected Kafka lessons/}).click();await notice.waitFor();
+ await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'dark'});await page.screenshot({animations:'disabled',path:'/tmp/learning-continuity-mobile.png'});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await notice.getByRole('button',{name:'Suggest update',exact:true}).click();
+ await page.getByRole('button',{name:/Pending changes/}).waitFor();
+ assert.ok((await read()).continuity_flags.two,'Suggestion alone does not clear the warning');
+ await page.getByRole('button',{name:/Pending changes/}).click();await page.getByRole('button',{name:'Review changes',exact:true}).click();
+ await page.getByRole('button',{name:'Apply changes',exact:true}).click();await page.getByRole('dialog').waitFor({state:'detached'});
+ assert.equal((await read()).continuity_flags.two,undefined);
+ await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:/03.*Offsets and recovery/}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll('.lw-reading .lw-markdown')].length>0);
+ await page.waitForFunction(async track_id=>{const r=await fetch('/api/plugins/hermes-learning/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_version:1,action:'course_read',params:{track_id}})});return (await r.json()).lessons.some(l=>l.key==='three');},track.id);
+ const prompts=await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('learning-preview:')).flatMap(k=>{try{return JSON.parse(sessionStorage.getItem(k));}catch{return[];}}).filter(m=>m.role==='user').map(m=>m.text));
+ const latest=prompts.findLast(p=>p.includes('"lesson_key":"three"'));
+ assert.ok(latest);assert.match(latest,/account_id/);assert.match(latest,/earlier_lessons/);assert.match(latest,/"key":"two"/);
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({passed:true,warning:true,keepAndReload:true,reflag:true,reviewBeforeApply:true,mobile:true,latestEarlierContext:true,errors}));
+}catch(e){await page.screenshot({animations:'disabled',path:'/tmp/learning-continuity-failure.png'});throw e;}finally{await browser.close();}

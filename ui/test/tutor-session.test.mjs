@@ -4,7 +4,7 @@ import {TutorSession, tutorPrompt, visibleHistory} from '../src/tutor-session.mj
 function fixture(overrides={}) {
  const calls=[], listeners=new Map(), actions=[];
  const transport={onEvent(type,fn){listeners.set(type,fn);return()=>listeners.delete(type);},setSession(){},async request(method,params){calls.push({method,params});if(method==='session.create'&&params.parent_session_id&&overrides.seededCreate)return overrides.seededCreate(params);if(overrides[method])return overrides[method](params);if(method==='model.options')return {provider:'openai',model:'gpt-default',providers:[]};if(method==='config.set')return {key:'model',value:params.value.split(' ')[0],scope:'session',confirm_required:false};if(method==='session.create'&&params.parent_session_id)return {session_id:'branch-live',stored_session_id:'branch-saved'};if(method==='session.create')return {session_id:'live',stored_session_id:'saved'};if(method==='session.resume')return {session_id:'live2',stored_session_id:'saved',messages:[{role:'assistant',text:'Earlier lesson'}]};if(method==='session.history')return {messages:[]};if(method==='session.activate')return {running:false,open_requests:[]};return {status:'streaming'};}};
- const session=new TutorSession({transport,scope:'scope',profile:'default',pollMs:0,request:async(path,body)=>{actions.push(body);return{};}});
+ const session=new TutorSession({transport,scope:'scope',profile:'default',pollMs:0,request:async(path,body)=>{actions.push(body);return overrides.action?overrides.action(body):{};}});
  return{session,calls,actions,emit:(type,payload={},sid='live')=>listeners.get(type)?.({session_id:sid,payload})};
 }
 const context={track_id:'track',context_id:'context',job_id:'job',course:{track:{title:'Queues'},sources:[],outline:[]}};
@@ -164,4 +164,19 @@ test('creation persists the applied default or explicit selection beside the dur
   const f=fixture();await f.session.send('Teach',{...context,course:{...context.course,model}});
   assert.deepEqual(f.actions.find(a=>a.action==='course_bind').params.model,model);f.session.dispose();
  }
+});
+
+test('fresh tutor automatically receives saved earlier lessons before generation',async()=>{
+ const continuity={revision:3,outline:[{key:'three',title:'Groups',goal:'Read events'}],earlier_lessons:[{key:'one',content:'Orders use order_id.',version:2}],missing_earlier_lessons:['two']};
+ const f=fixture({action:body=>body.action==='course_context'?continuity:{}});
+ await f.session.send('Teach',{...context,lesson_key:'three',course:{...context.course,capabilities:['lesson-continuity-v1']}});
+ assert.equal(f.actions[0].action,'course_context');
+ const prompt=f.calls.find(c=>c.method==='prompt.submit').params.text;
+ assert.match(prompt,/Orders use order_id/);assert.match(prompt,/"revision":3/);assert.match(prompt,/missing_earlier_lessons/);
+ f.session.dispose();
+});
+test('context preparation failure does not submit a disconnected lesson',async()=>{
+ const f=fixture({action:()=>{throw Error('Context unavailable');}});
+ await assert.rejects(f.session.send('Teach',{...context,course:{...context.course,capabilities:['lesson-continuity-v1']}}),/Context unavailable/);
+ assert.equal(f.calls.filter(c=>c.method==='prompt.submit').length,0);f.session.dispose();
 });
