@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useLayoutEffect,useRef,useState} from 'react';
 import CourseContent,{Markdown} from './CourseContent.jsx';
 import {LessonTeaching} from './PracticePanel.jsx';
 import {Icon} from './icons.jsx';
@@ -8,7 +8,8 @@ function LessonPreview({lesson,sources}){return <><LessonTeaching teaching={less
 
 function Dialog({title,onClose,children,busy=false}) {
  const ref=useRef(null);
- useEffect(()=>{const node=ref.current;node.showModal();return()=>node.close();},[]);
+ // Close before React removes the dialog so native focus restoration can run.
+ useLayoutEffect(()=>{const node=ref.current;node.showModal();return()=>node.close();},[]);
  return <dialog ref={ref} className="lw-change-dialog" aria-label={title} onCancel={event=>{event.preventDefault();if(!busy)onClose();}} onClick={event=>{if(event.target===ref.current&&!busy)onClose();}}><header><h2>{title}</h2><button type="button" className="lw-icon-button" disabled={busy} aria-label="Close changes" onClick={onClose}><Icon name="close"/></button></header>{children}</dialog>;
 }
 export function ChangeRequestDialog({initialKind='roadmap',lesson,onSend,onClose}) {
