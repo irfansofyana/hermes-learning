@@ -36,10 +36,25 @@ test('picker has an accessible model label and default choice',async()=>{
  const html=renderToStaticMarkup(createElement(ModelPicker,{transport:null,value:null,onChange(){}}));
  assert.match(html,/Model/);assert.match(html,/Hermes default/);assert.match(html,/<label[^>]*for=/);
 });
-test('branching preserves server-side conversation with the resolved default and idempotency key',async()=>{
+test('model switching seeds a supported create request with the complete dialogue and resolved default',async()=>{
  const {branchSessionModel}=await import('../src/model-options.mjs');const t=transport();const request=t.request;
- t.request=async(method,params)=>method==='session.branch_stored'?(t.calls.push({method,params}),{session_id:'next',stored_session_id:'saved-next'}):request(method,params);
+ t.request=async(method,params)=>method==='session.create'?(t.calls.push({method,params}),{session_id:'next',stored_session_id:'saved-next'}):method==='session.history'?{messages:[{role:'user',text:'Question'},{role:'tool',content:'not copied'},{role:'assistant',content:'Answer'}]}:request(method,params);
  const result=await branchSessionModel(t,'work','live','saved',null,{idempotencyKey:'change-1'});
- assert.equal(result.session_id,'next');assert.deepEqual(t.calls.at(-1).params,{profile:'work',parent_session_id:'saved',provider:'openai',model:'gpt-default',close_on_disconnect:false,idempotency_key:'change-1'});
+ assert.equal(result.session_id,'next');assert.deepEqual(t.calls.at(-1).params,{profile:'work',parent_session_id:'saved',messages:[{role:'user',content:'Question'},{role:'assistant',content:'Answer'}],provider:'openai',model:'gpt-default',close_on_disconnect:false,idempotency_key:'change-1'});
  assert.equal(t.calls.filter(c=>c.method==='config.set').length,0);
+});
+
+test('missing or non-text history prevents model replacement instead of losing conversation',async()=>{
+ const {branchSessionModel}=await import('../src/model-options.mjs');
+ for(const history of [{},{messages:[{role:'user',content:[{type:'image',url:'private'}]}]}]){
+  const t=transport();const request=t.request;t.request=async(method,params)=>method==='session.history'?history:request(method,params);
+  await assert.rejects(branchSessionModel(t,'work','live','saved',null,{idempotencyKey:'change'}),/history/);
+  assert.equal(t.calls.filter(c=>c.method==='session.create').length,0);
+ }
+});
+test('scope changes while reading history prevent model session creation',async()=>{
+ const {branchSessionModel}=await import('../src/model-options.mjs');let current=true;
+ const t=transport();const request=t.request;t.request=async(method,params)=>{if(method==='session.history'){current=false;return {messages:[]};}return request(method,params);};
+ await assert.rejects(branchSessionModel(t,'work','live','saved',null,{idempotencyKey:'change',isCurrent:()=>current}),/changed|cancel/);
+ assert.equal(t.calls.filter(c=>c.method==='session.create').length,0);
 });

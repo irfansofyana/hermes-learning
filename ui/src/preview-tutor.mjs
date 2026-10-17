@@ -13,8 +13,8 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
    if(method==='model.options')return {provider:'preview',model:'preview-default',providers:[{slug:'preview',name:'Simulated models',authenticated:true,models:['preview-default','preview-alternate']}]};
    if(method==='config.set')return {key:'model',value:String(params.value).split(' ')[0],scope:'session'};
 
-   if(method==='session.branch_stored'){const sid=crypto.randomUUID();save(sid,load(params.parent_session_id));return {session_id:sid,stored_session_id:sid,messages:load(sid)};}
-   if(method==='session.create'){const sid=crypto.randomUUID();save(sid,[]);return{session_id:sid,stored_session_id:sid};}
+   if(method==='session.branch_stored'){const allowed=['profile','parent_session_id','cols','source','cwd','idempotency_key'];if(Object.keys(params).some(key=>!allowed.includes(key)))throw Error('session.branch_stored does not accept model/provider overrides.');const sid=crypto.randomUUID();save(sid,load(params.parent_session_id));return {session_id:sid,stored_session_id:sid,messages:load(sid)};}
+   if(method==='session.create'){const sid=crypto.randomUUID();save(sid,params.messages||[]);return{session_id:sid,stored_session_id:sid};}
    if(method==='session.resume'){active=params.session_id;return{session_id:active,stored_session_id:active,messages:load(active),running:timers.has(active),todo_state:load(active+':plan')};}
    if(method==='session.history')return{messages:load(params.session_id)};
    if(method==='session.activate')return{running:timers.has(sid),open_requests:[],todo_state:load(sid+':plan')};

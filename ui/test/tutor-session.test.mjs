@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {TutorSession, tutorPrompt, visibleHistory} from '../src/tutor-session.mjs';
 function fixture(overrides={}) {
  const calls=[], listeners=new Map(), actions=[];
- const transport={onEvent(type,fn){listeners.set(type,fn);return()=>listeners.delete(type);},setSession(){},async request(method,params){calls.push({method,params});if(overrides[method])return overrides[method](params);if(method==='model.options')return {provider:'openai',model:'gpt-default',providers:[]};if(method==='config.set')return {key:'model',value:params.value.split(' ')[0],scope:'session',confirm_required:false};if(method==='session.branch_stored')return {session_id:'branch-live',stored_session_id:'branch-saved'};if(method==='session.create')return {session_id:'live',stored_session_id:'saved'};if(method==='session.resume')return {session_id:'live2',stored_session_id:'saved',messages:[{role:'assistant',text:'Earlier lesson'}]};if(method==='session.history')return {messages:[]};if(method==='session.activate')return {running:false,open_requests:[]};return {status:'streaming'};}};
+ const transport={onEvent(type,fn){listeners.set(type,fn);return()=>listeners.delete(type);},setSession(){},async request(method,params){calls.push({method,params});if(method==='session.create'&&params.parent_session_id&&overrides.seededCreate)return overrides.seededCreate(params);if(overrides[method])return overrides[method](params);if(method==='model.options')return {provider:'openai',model:'gpt-default',providers:[]};if(method==='config.set')return {key:'model',value:params.value.split(' ')[0],scope:'session',confirm_required:false};if(method==='session.create'&&params.parent_session_id)return {session_id:'branch-live',stored_session_id:'branch-saved'};if(method==='session.create')return {session_id:'live',stored_session_id:'saved'};if(method==='session.resume')return {session_id:'live2',stored_session_id:'saved',messages:[{role:'assistant',text:'Earlier lesson'}]};if(method==='session.history')return {messages:[]};if(method==='session.activate')return {running:false,open_requests:[]};return {status:'streaming'};}};
  const session=new TutorSession({transport,scope:'scope',profile:'default',pollMs:0,request:async(path,body)=>{actions.push(body);return{};}});
  return{session,calls,actions,emit:(type,payload={},sid='live')=>listeners.get(type)?.({session_id:sid,payload})};
 }
@@ -95,16 +95,16 @@ test('changing an existing path model and returning to default are confirmed bef
  const f=fixture({'model.options':()=>({provider:'openai',model:'gpt-default',providers:[]}), 'config.set':params=>({key:'model',value:params.value.split(' ')[0],scope:'session',confirm_required:false})});
  const send=selection=>f.session.send('Explain',{...context,job_id:undefined,course:{...context.course,model:selection}});
  await send({provider:'openai',model:'gpt-first'});await f.session.finish();await send({provider:'openai',model:'gpt-next'});await f.session.finish();await send(null);
- assert.deepEqual(f.calls.filter(c=>c.method==='session.branch_stored').map(c=>c.params.model),['gpt-next','gpt-default']);assert.equal(f.calls.filter(c=>c.method==='config.set').length,0);
+ assert.deepEqual(f.calls.filter(c=>c.method==='session.create'&&c.params.parent_session_id).map(c=>c.params.model),['gpt-next','gpt-default']);assert.equal(f.calls.filter(c=>c.method==='config.set').length,0);
  assert.equal(f.calls.at(-1).method,'prompt.submit');f.session.dispose();
 });
 test('restored model override is reconciled before the first new prompt',async()=>{
  const f=fixture({'model.options':()=>({provider:'openai',model:'gpt-default',providers:[]}), 'config.set':()=>({key:'model',value:'gpt-default',scope:'session',confirm_required:false})});
  await f.session.restore({session_id:'saved',scope:'scope'},context);assert.equal(f.calls.filter(c=>c.method==='config.set').length,0);
- await f.session.send('Explain',{...context,job_id:undefined});assert.equal(f.calls.filter(c=>c.method==='session.branch_stored').length,1);f.session.dispose();
+ await f.session.send('Explain',{...context,job_id:undefined});assert.equal(f.calls.filter(c=>c.method==='session.create'&&c.params.parent_session_id).length,1);f.session.dispose();
 });
 test('unsupported safe branching never sends with the previous model',async()=>{
- const f=fixture({'session.branch_stored':()=>{throw Error('Session branching is unavailable');}});
+ const f=fixture({seededCreate:()=>{throw Error('Session branching is unavailable');}});
  await f.session.send('Explain',{...context,job_id:undefined});await f.session.finish();
  await assert.rejects(f.session.send('Again',{...context,job_id:undefined,course:{...context.course,model:{provider:'openai',model:'gpt-picked'}}}),/branching/);
  assert.equal(f.calls.filter(c=>c.method==='prompt.submit').length,1);assert.equal(f.session.uncertain,false);f.session.dispose();
@@ -118,7 +118,7 @@ test('lesson instructions specify observable teaching and separate optional prac
  const prompt=tutorPrompt('Teach',context);assert.match(prompt,/prerequisites/);assert.match(prompt,/misconception/);assert.match(prompt,/criteria/);assert.match(prompt,/separate practice/i);assert.match(prompt,/coherent project/i);
 });
 test('a cancelled model branch keeps the original conversation and cannot submit late',async()=>{
- let release;const f=fixture({'session.branch_stored':()=>new Promise(r=>{release=r;})});
+ let release;const f=fixture({seededCreate:()=>new Promise(r=>{release=r;})});
  const selected={provider:'openai',model:'gpt-original'};const ctx=model=>({...context,job_id:undefined,course:{...context.course,model}});
  await f.session.send('First',ctx(selected));await f.session.finish();
  const sending=f.session.send('Switch',ctx({provider:'openai',model:'gpt-next'}));await new Promise(r=>setTimeout(r,0));
@@ -140,23 +140,23 @@ test('model branch retains displayed history, rebinds the path, and ignores old-
  assert.equal(f.calls.at(-1).params.session_id,'branch-live');f.session.dispose();
 });
 test('failed branch creation reuses its idempotency key and never submits the pending turn',async()=>{
- let tries=0;const f=fixture({'session.branch_stored':()=>{if(++tries===1)throw Error('Connection lost');return{session_id:'next',stored_session_id:'next-saved'};}});
+ let tries=0;const f=fixture({seededCreate:()=>{if(++tries===1)throw Error('Connection lost');return{session_id:'next',stored_session_id:'next-saved'};}});
  await f.session.send('First',{...context,job_id:undefined});await f.session.finish();
  const ctx={...context,job_id:undefined,course:{...context.course,model:{provider:'openai',model:'gpt-next'}}};
  await assert.rejects(f.session.send('Next',ctx),/Connection lost/);assert.equal(f.calls.filter(c=>c.method==='prompt.submit').length,1);
- await f.session.send('Next',ctx);const branches=f.calls.filter(c=>c.method==='session.branch_stored');assert.equal(branches[0].params.idempotency_key,branches[1].params.idempotency_key);f.session.dispose();
+ await f.session.send('Next',ctx);const branches=f.calls.filter(c=>c.method==='session.create'&&c.params.parent_session_id);assert.equal(branches[0].params.idempotency_key,branches[1].params.idempotency_key);f.session.dispose();
 });
 test('restoring an unchanged durable model selection reuses the saved conversation',async()=>{
  for(const model of [null,{provider:'openai',model:'gpt-picked'}]){
   const f=fixture();const ctx={...context,job_id:undefined,course:{...context.course,model}};
   await f.session.restore({session_id:'saved',scope:'scope',model},ctx);await f.session.send('Continue',ctx);
-  assert.equal(f.calls.filter(c=>c.method==='session.branch_stored').length,0);assert.equal(f.calls.at(-1).params.session_id,'live2');f.session.dispose();
+  assert.equal(f.calls.filter(c=>c.method==='session.create'&&c.params.parent_session_id).length,0);assert.equal(f.calls.at(-1).params.session_id,'live2');f.session.dispose();
  }
 });
 test('a changed path selection branches after restoring a different applied selection',async()=>{
  const f=fixture();const model={provider:'openai',model:'gpt-new'},ctx={...context,job_id:undefined,course:{...context.course,model}};
  await f.session.restore({session_id:'saved',scope:'scope',model:null},ctx);await f.session.send('Continue',ctx);
- assert.equal(f.calls.filter(c=>c.method==='session.branch_stored').length,1);
+ assert.equal(f.calls.filter(c=>c.method==='session.create'&&c.params.parent_session_id).length,1);
  assert.deepEqual(f.actions.filter(a=>a.action==='course_bind').at(-1).params.model,model);f.session.dispose();
 });
 test('creation persists the applied default or explicit selection beside the durable binding',async()=>{

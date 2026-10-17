@@ -13,7 +13,7 @@ Contracts: teaching={outcome,prerequisites:[string],misconception}; practice={ki
 
 Implementation notes:
 - Implemented stages 1–2 and path model selection; adaptive memory and spaced review remain out of scope.
-- Model changes use supported history branching with session overrides, because deferred host config switches can continue with the old model after a failed switch. Applied choice is saved in the binding to avoid needless branches after reload.
+- Model changes copy authenticated dialogue history into a session.create request with session overrides, because deferred config switches can continue with the old model and session.branch_stored rejects override fields. Applied choice is saved in the binding to avoid needless branches after reload.
 - A registered pre-tool hook restricts evaluator sessions to the scoped feedback tool; code is reviewed without execution.
 - Explicit recovery reconciles saved attempts using stable request IDs and never replays a possibly delivered prompt. Healthy shared WebSocket connections remain open when another session restores.
 - Existing lessons stay readable. Model publication requires teaching/practice; source, topic, and project prompts use the same contract. Lesson versions remain monotonic even if a key is removed and later reintroduced.

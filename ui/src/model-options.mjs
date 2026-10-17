@@ -41,9 +41,9 @@ export async function applySessionModel(transport,profile,sessionId,selection,{i
  if(result?.key!=='model'||typeof result.value!=='string'||!result.value||result.scope!=='session'||result.error||result.status==='error')throw Error('Hermes did not confirm the model change. Your request was not sent.');
  return {...target,model:result.value};
 }
-// Existing compute-host sessions can only queue a model switch, which the host
-// may silently drop while continuing the prompt. Branch with a create override
-// instead: the host copies its stored display history and builds the chosen route.
+// session.branch_stored uses the create implementation internally, but its wire
+// schema does NOT allow model/provider overrides. Read the authenticated history
+// and seed session.create instead; that public contract supports both together.
 export async function branchSessionModel(transport,profile,sessionId,storedSessionId,selection,{isCurrent=()=>true,idempotencyKey}={}){
  const check=()=>{if(!isCurrent())throw Error('The learning session changed. Model selection was cancelled.');};
  const params=values=>({...(profile?{profile}:{}),...values});
@@ -52,9 +52,16 @@ export async function branchSessionModel(transport,profile,sessionId,storedSessi
  check();if(snapshot.running!==false)throw Error('Wait for the current turn before changing its model.');
  const target=selection==null?(await loadModelOptions(transport,profile)).defaultModel:modelCreateParams(selection);
  check();if(!target)throw Error('Hermes could not resolve this profile’s default model. Retry loading models.');
- let created;
- try{created=await transport.request('session.branch_stored',params({parent_session_id:storedSessionId,...target,close_on_disconnect:false,idempotency_key:idempotencyKey}));}
- catch(error){if(error.code===-32601)throw Error('This Hermes host needs an update to change models while preserving the tutor conversation. Your request was not sent.');throw error;}
+ const history=await transport.request('session.history',params({session_id:sessionId}));
+ check();
+ if(!Array.isArray(history?.messages))throw Error('Hermes did not return the tutor history. Your model change was not applied.');
+ const messages=history.messages.flatMap(message=>{
+  if(!message||!['user','assistant'].includes(message.role)||message.display_kind==='hidden')return [];
+  const content=typeof message.text==='string'?message.text:typeof message.content==='string'?message.content:null;
+  if(content===null)throw Error('This conversation contains history that cannot be copied safely. Your model change was not applied.');
+  return content.trim()?[{role:message.role,content}]:[];
+ });
+ const created=await transport.request('session.create',params({parent_session_id:storedSessionId,messages,...target,close_on_disconnect:false,idempotency_key:idempotencyKey}));
  check();
  if(!created?.session_id||!created.stored_session_id||created.confirm_required||created.error)throw Error('Hermes did not create the conversation with the selected model. Your request was not sent.');
  return created;
