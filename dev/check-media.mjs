@@ -21,8 +21,8 @@ try{
  await modal.getByRole('button',{name:'Fit',exact:true}).click();await page.keyboard.press('Escape');await modal.waitFor({state:'detached'});
  await lesson.locator('.lw-media-source').first().getByText('Diagram source',{exact:true}).click();await lesson.locator('.lw-media-source').first().getByRole('button',{name:'Copy code',exact:true}).waitFor();
  await page.getByRole('button',{name:/Pending changes/}).click();await page.getByRole('button',{name:'Review changes',exact:true}).click();
- const review=page.getByRole('dialog',{name:'Review learning changes'});await review.waitFor();
- await page.waitForFunction(()=>[...document.querySelectorAll('.lw-change-dialog .lw-media-open img')].filter(img=>img.checkVisibility()).length===3&&[...document.querySelectorAll('.lw-change-dialog .lw-media-open img')].filter(img=>img.checkVisibility()).every(img=>img.complete&&img.naturalWidth>0));
+ const review=page.getByRole('dialog',{name:'Review learning changes'});await review.waitFor();await review.getByRole('button',{name:'Preview',exact:true}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll('[aria-label="Proposed lesson preview"] .lw-media-open img')].filter(img=>img.checkVisibility()).length===3&&[...document.querySelectorAll('[aria-label="Proposed lesson preview"] .lw-media-open img')].filter(img=>img.checkVisibility()).every(img=>img.complete&&img.naturalWidth>0));
  // An enlarged diagram is a second native modal; closing it keeps the review open.
  await review.locator('.lw-media-open:visible').first().click();await modal.waitFor();await page.keyboard.press('Escape');await modal.waitFor({state:'detached'});await review.waitFor();
  await page.getByRole('button',{name:'Close preview',exact:true}).click();
