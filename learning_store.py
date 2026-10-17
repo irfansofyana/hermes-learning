@@ -8,6 +8,9 @@ revision guarded or derived in the same transaction. Review policy v1 uses
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+import base64
+import importlib.util
+import re
 import hashlib
 import json
 from pathlib import Path
@@ -17,13 +20,17 @@ import time
 import uuid
 from urllib.parse import urlsplit
 
+_media_spec = importlib.util.spec_from_file_location('hermes_learning_media', Path(__file__).with_name('learning_media.py'))
+_media = importlib.util.module_from_spec(_media_spec)
+_media_spec.loader.exec_module(_media)
+
 API_VERSION = SCHEMA_VERSION = 1
 LEVELS = ['none', 'nudge', 'targeted-hint', 'worked-step', 'full-solution-shown']
 OUTCOMES = ['needs-work', 'developing', 'demonstrated']
-CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1']
+CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1', 'lesson-media-v1']
 WITHHELD = 'Content withheld by source-sharing policy.'
-READS = {'practice_read', 'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
-WRITES = {'course_model', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback', 'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
+READS = {'course_asset_read', 'course_diagram_render', 'practice_read', 'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
+WRITES = {'course_asset_import', 'course_model', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback', 'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
 KINDS = ('track', 'source', 'activity', 'attempt', 'assessment', 'review', 'dispute', 'help', 'run', 'context', 'recommendation')
 
 
@@ -106,6 +113,7 @@ class Store:
                     db.execute('CREATE INDEX records_track_kind ON records(track_id,kind)')
                     db.execute('INSERT INTO metadata VALUES (?,?)', ('store_id', str(uuid.uuid4())))
                     db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
+                db.execute('CREATE TABLE IF NOT EXISTS lesson_media (id TEXT PRIMARY KEY, track_id TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL)')
                 self.store_id = db.execute("SELECT value FROM metadata WHERE key='store_id'").fetchone()[0]
                 db.commit()
             except BaseException:
@@ -710,6 +718,7 @@ class Store:
                 if not source['excerpt'].strip():
                     fail('An unread reference cannot be cited as source material', 'source_unread', 409)
             content = text(lesson.get('content'), 'lesson content', 50000, True)
+            self._check_media_refs(db, tid, content)
             if '\ue200cite' in content:
                 fail('Use Markdown source links with actual URLs, not internal citation markers.', 'invalid_citation')
             cleaned.append({'lesson_key': key, 'title': titles[key], 'content': content,
@@ -824,6 +833,38 @@ class Store:
                 other.update(status='stale', updated_at=now)
                 self._put(db, 'course_proposal', other, True)
         return {'proposal': self._course_proposal_view(db, proposal, channel), 'revision': revision + 1}
+
+    def _check_media_refs(self, db, tid, content):
+        for ident in re.findall(r'learning-asset:([A-Za-z0-9_-]+)', content):
+            self._get(db, 'course_asset', ident, tid)
+
+    def _media_dispatch(self, db, action, p, channel):
+        if action == 'course_asset_read':
+            if channel != 'ui_direct': fail('Image bytes are available only to the human workspace', status=403)
+            tid = self._get(db, 'track', p.get('track_id'))['id']
+            asset = self._get(db, 'course_asset', p.get('asset_id'), tid)
+            row = db.execute('SELECT mime,data FROM lesson_media WHERE id=? AND track_id=?', (asset['id'], tid)).fetchone()
+            if not row: fail('Saved image is unavailable', status=404)
+            return {**asset, 'mime': row[0], 'data': base64.b64encode(row[1]).decode()}
+        context, track = self._context(db, p.get('context_id'))
+        tid = track['id']
+        if not self._course_data(db, tid): fail('Open a learning path first')
+        if action == 'course_diagram_render':
+            try: return _media.render_archify(p.get('source'))
+            except ValueError as exc: fail(str(exc))
+        if channel != 'chat_relayed': fail('Local image import is available only to the Hermes tutor', status=403)
+        title = text(p.get('title'), 'image title', 300, True)
+        try: data, mime, width, height, digest = _media.image_file(p.get('path'))
+        except ValueError as exc: fail(str(exc))
+        assets = self._all(db, 'course_asset', tid)
+        asset = next((item for item in assets if item['sha256'] == digest and item['title'] == title), None)
+        if not asset:
+            if len(assets) >= 50 or sum(item['size'] for item in assets) + len(data) > 50 * 1024 * 1024:
+                fail('This path has reached its image limit (50 images or 50 MB).')
+            asset = self._new(track_id=tid, title=title, mime=mime, width=width, height=height, size=len(data), sha256=digest, created_at=iso(self.clock()))
+            self._put(db, 'course_asset', asset)
+            db.execute('INSERT INTO lesson_media VALUES (?,?,?,?)', (asset['id'], tid, mime, data))
+        return {'asset': asset, 'markdown': f"![Saved image](learning-asset:{asset['id']})"}
 
     def _course_dispatch(self, db, action, p, channel):
         now = iso(self.clock())
@@ -1058,6 +1099,7 @@ class Store:
                 if not source['excerpt'].strip():
                     fail('An unread reference cannot be cited as source material', 'source_unread', 409)
             content = text(p.get('content'), 'lesson content', 50000, True)
+            self._check_media_refs(db, tid, content)
             if '\ue200cite' in content:
                 fail('Use Markdown source links with the actual URL, not internal citation markers. Correct the content and retry this same job.', 'invalid_citation')
             publication = {'key': key, 'title': item['title'], 'content': content,
@@ -1124,6 +1166,8 @@ class Store:
                 raise
 
     def _dispatch(self, db, action, p, channel):
+        if action in ('course_asset_import', 'course_asset_read', 'course_diagram_render'):
+            return self._media_dispatch(db, action, p, channel)
         if action.startswith('practice_'):
             return self._practice_dispatch(db, action, p, channel)
         if action.startswith('course_'):

@@ -1,0 +1,3 @@
+Pinned from the locally installed Archify 2.16.0 distribution (https://github.com/tt-a1i/archify), MIT license in LICENSE. Includes the five typed renderers, their shared validators, bundled brand marks, and viewer template. Runtime rendering uses only Node built-ins; no npm installation is needed on the backend.
+
+Learning invokes these renderers with private temporary input/output files, rejects external brands and repository evidence, and extracts a static SVG image. It never executes the generated HTML viewer. Upstream files are unmodified. Update this directory deliberately alongside renderer regression tests.

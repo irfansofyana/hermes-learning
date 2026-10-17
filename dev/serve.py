@@ -18,7 +18,7 @@ ACTIONS = frozenset(('start', 'resume', 'leave', 'brief', 'approve', 'track_stat
                      'source', 'activity', 'run', 'help', 'submit', 'assess',
                      'dispute', 'review', 'resume_brief', 'recommendation',
                      'recommendation_decide', 'quote_check', 'activity_revision',
-                     'course_start', 'course_open', 'course_read', 'course_generate',
+                     'course_asset_read', 'course_diagram_render', 'course_start', 'course_open', 'course_read', 'course_generate',
                      'course_propose', 'course_apply', 'course_dismiss',
                      'course_bind', 'course_position', 'course_plan', 'course_lesson',
                      'course_job_status', 'course_source', 'course_model',

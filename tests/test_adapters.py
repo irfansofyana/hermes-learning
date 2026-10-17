@@ -31,7 +31,7 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(set(manifest_tools), set(ctx.tools), 'Declared capabilities must match the registered tools for Hermes admission')
         self.assertEqual(ctx.commands, {}, 'The retired command flow must not be registered')
         self.assertEqual(set(ctx.tools), {
-            'learning_course_source', 'learning_course_read', 'learning_course_plan',
+            'learning_course_asset_import', 'learning_course_diagram_render', 'learning_course_source', 'learning_course_read', 'learning_course_plan',
             'learning_course_lesson', 'learning_course_propose', 'learning_practice_feedback', 'learning_source_read', 'learning_quote_check', 'learning_state',
         })
         with patch.object(self.plugin.runtime, 'action', return_value={'ok': True}) as dispatch:

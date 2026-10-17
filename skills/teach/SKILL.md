@@ -33,7 +33,7 @@ Before publishing, check that the explanation teaches the outcome, the example d
 
 Use Markdown headings, lists and tables where they aid explanation. Put code in fenced blocks with a language name such as `python`, `javascript`, `sql` or `bash`; unlabelled or unknown languages display as plain code. Keep code examples copyable. Describe predicted output as expected behavior unless a real tool result establishes execution.
 
-When a visual makes a lesson easier to understand, send a real structured `visual` argument with the lesson in `learning_course_lesson` or the proposed `lessons` entry in `learning_course_propose` as well as the explanation in `content`. Choose a sequence for system exchanges, a state-machine for lifecycle transitions, or a code-trace for an algorithm's changing values. Do not require a diagram in every lesson. A diagram promised in prose or a JSON block inside `content` does not create a visual. Do not embed Mermaid, HTML, SVG or JavaScript to render diagrams.
+When a visual makes a lesson easier to understand, send a real structured `visual` argument with the lesson in `learning_course_lesson` or the proposed `lessons` entry in `learning_course_propose` as well as the explanation in `content`. Choose a sequence for system exchanges, a state-machine for lifecycle transitions, or a code-trace for an algorithm's changing values. Do not require a diagram in every lesson. A diagram promised in prose or a JSON block inside `content` does not create a visual. Alternatively, put Mermaid definitions in `mermaid` fenced blocks, or typed Archify JSON in `archify` fenced blocks, anywhere in `content`. These render inline in lessons, chat and revision previews. Do not embed raw HTML, SVG or JavaScript.
 
 Each lesson accepts one schema-1 visual with 1–30 steps. Sequence diagrams allow at most 10 participants; state machines allow at most 20 states. Use unique node IDs and valid step references. State-machine steps must continue from the previous state, starting at `initial`. Code-trace lines are 1-based references into `code`; variable values are strings. Lessons publish every step: omit `visible_steps` or set it to the step count.
 
@@ -84,3 +84,20 @@ The learner may check an answer, ask for hints, reveal the explanation, or skip.
 ## Continuity and availability
 
 The workspace restores its saved lesson position and tutor conversation. Do not ask the learner to copy commands or internal IDs. If the backend or publication is unavailable, explain the failure; do not claim a save succeeded. Only describe host behavior that has actually been verified.
+
+## Inline diagrams and saved images
+
+Prefer Mermaid for component relationships and ordinary flowcharts. Keep the source under 30,000 characters and 200 edges, without configuration directives, frontmatter, custom CSS, embedded images or external resources. Explain the diagram in surrounding text. For example:
+
+```mermaid
+flowchart LR
+    P[Producer] --> T[Kafka topic]
+    T --> A[Consumer group A]
+    T --> B[Consumer group B]
+```
+
+For richer Archify diagrams, use the Archify skill to author its typed JSON (architecture, workflow, sequence, dataflow, or lifecycle). Call `learning_course_diagram_render(context_id, source)` with the JSON string to validate the actual renderer before publishing. Fix schema/layout errors, then include that exact JSON in an `archify` code fence in lesson content. Rendering requires Node.js 18+ on the backend; the Mac does not need Archify. Built-in brand IDs work; remote brand resources, repository inspection and HTML viewer scripts are not supported in Learning. The source stays editable and the rendered image can be enlarged and zoomed.
+
+For generated PNG/JPEG files, call `learning_course_asset_import(context_id, path, title)` using the absolute host path and a descriptive caption. Files are limited to 5 MB and 16 megapixels (8192 pixels per side); each path can store 50 images or 50 MB. Insert the exact returned Markdown reference at the relevant point in the lesson. Replace `Saved image` with useful alt text if appropriate, retaining its `learning-asset:` reference. The image is copied to profile storage and will survive deletion of the temporary original. External URLs, local paths and data URLs do not become inline images.
+
+For existing lessons, include the full revised content with diagram/asset references in `learning_course_propose` and let the learner review and apply it. Preserve other attachments and content when revising. Importing or rendering alone does not update a lesson. Do not claim that a pending revision is already applied.

@@ -2,12 +2,14 @@ import React,{Children,memo,useId} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {Visual} from './Visual.jsx';
+import {DiagramBlock,SavedImage} from './LessonMedia.jsx';
+import {assetId} from './lesson-media.mjs';
 import {CodeBlock} from './CodeBlock.jsx';
 
 export function safeCourseURL(value){
  try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password?url.href:null;}catch{return null;}
 }
-function markdownURL(value){return value.startsWith('#')?value:safeCourseURL(value);}
+function markdownURL(value){return value.startsWith('#')||assetId(value)?value:safeCourseURL(value);}
 function citationText(){
  return tree=>{
   function visit(node){
@@ -28,10 +30,11 @@ function scopeFootnotes({prefix}){
  };
 }
 const components={
+ p:({children,node})=>node?.children?.some(child=>child.tagName==='img')?<div className="lw-media-paragraph">{children}</div>:<p>{children}</p>,
  h1:({children,id})=><h2 id={id}>{children}</h2>,h2:({children,id})=><h3 id={id}>{children}</h3>,h3:({children,id})=><h4 id={id}>{children}</h4>,h4:({children,id})=><h5 id={id}>{children}</h5>,h5:({children,id})=><h6 id={id}>{children}</h6>,
- a:({href,children,...props})=>href?<a href={href} id={props.id} aria-label={props['aria-label']} aria-describedby={props['aria-describedby']} {...(href.startsWith('#')?{}:{target:'_blank',rel:'noopener noreferrer'})}>{children}</a>:<span>{children}</span>,
- img:({src,alt})=>src?<a href={src} target="_blank" rel="noopener noreferrer">{alt||'Open image'}</a>:<span>{alt||'Image unavailable'}</span>,
- pre:({children})=>{const child=Children.toArray(children)[0];return <CodeBlock code={String(child?.props?.children||'').replace(/\n$/,'')} language={child?.props?.className?.replace(/^language-/,'')||''}/>;},
+ a:({href,children,...props})=>assetId(href)?<span>{children}</span>:href?<a href={href} id={props.id} aria-label={props['aria-label']} aria-describedby={props['aria-describedby']} {...(href.startsWith('#')?{}:{target:'_blank',rel:'noopener noreferrer'})}>{children}</a>:<span>{children}</span>,
+ img:({src,alt})=>assetId(src)?<SavedImage src={src} alt={alt}/>:src?<a href={src} target="_blank" rel="noopener noreferrer">{alt||'Open image'}</a>:<span>{alt||'Image unavailable'}</span>,
+ pre:({children})=>{const child=Children.toArray(children)[0],language=child?.props?.className?.replace(/^language-/,''),source=String(child?.props?.children||'').replace(/\n$/,'');if(['mermaid','archify'].includes(language))return <DiagramBlock language={language} source={source}/>;return <CodeBlock code={String(child?.props?.children||'').replace(/\n$/,'')} language={child?.props?.className?.replace(/^language-/,'')||''}/>;},
  table:({children})=><div className="lw-table-wrap" role="region" aria-label="Lesson table" tabIndex={0}><table>{children}</table></div>,
  th:({children,style})=><th scope="col" style={style}>{children}</th>
 };
