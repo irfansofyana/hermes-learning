@@ -10,6 +10,7 @@ A personal learning workspace for [Hermes Agent](https://github.com/NousResearch
 - **Bring your own material.** Attach multiple text, Markdown, or code files, or add source and repository links. Each source shows whether its text is available or retrieval failed.
 - **Read and ask in one place.** Follow lessons with formatted Markdown, tables, highlighted code you can copy, and step-by-step sequence diagrams, state machines, or code traces. Ask for a simpler explanation or another example beside the lesson.
 - **Change a saved path.** Ask the tutor to rewrite a lesson, adjust the roadmap, add lessons, or regenerate the path. Review the summary and preview, then choose **Apply changes** or dismiss it. Ordinary questions leave saved lessons unchanged.
+- **Follow the tutor’s work.** See exposed thinking, tool activity, and plan progress inside the chat. Expand the panel for more room.
 - **Continue later.** Reopen your last lesson and its tutor conversation. Generate later lessons when you select them.
 
 Updates keep your sources and tutor conversation. Unchanged lessons keep their read markers; rewritten lessons clear theirs, and regeneration resets reading progress.

@@ -10,12 +10,18 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
   setSession(sid){active=sid;},reconnect:async()=>{},dispose(){disposed=true;clearTimeout(timer);listeners.clear();},
   async request(method,params={}){
    if(method==='session.create'){const sid=crypto.randomUUID();save(sid,[]);return{session_id:sid,stored_session_id:sid};}
-   if(method==='session.resume'){active=params.session_id;return{session_id:active,stored_session_id:active,messages:load(active),running:false};}
+   if(method==='session.resume'){active=params.session_id;return{session_id:active,stored_session_id:active,messages:load(active),running:false,todo_state:load(active+':plan')};}
    if(method==='session.history')return{messages:load(params.session_id)};
-   if(method==='session.activate')return{running:timer!==null,open_requests:[]};
+   if(method==='session.activate')return{running:timer!==null,open_requests:[],todo_state:load(active+':plan')};
    if(method==='session.interrupt'){clearTimeout(timer);timer=null;emit('message.complete',{text:'Preview stopped.',status:'interrupted'});return{};}
    if(method==='prompt.submit'){
     const sid=params.session_id;active=sid;const history=load(sid);history.push({role:'user',text:params.text});save(sid,history);
+    const toolId=crypto.randomUUID();
+    emit('message.start',{});
+    emit('reasoning.delta',{text:'Simulated progress: review the saved path, then prepare an example for the learner.'});
+    emit('tool.start',{tool_id:toolId,name:'learning_course_read'});
+    const plan={revision:Date.now(),todos:[{id:'read',content:'Review the learning path',status:'in_progress'},{id:'reply',content:'Prepare the response',status:'pending'}]};
+    save(sid+':plan',plan);emit('todo.updated',plan);
     timer=setTimeout(async()=>{
      try{
       const marker='Scoped learning data (JSON):\n';const raw=params.text.split(marker)[1]?.split('\n[/Hermes Learning context]')[0];const c=JSON.parse(raw);
@@ -51,6 +57,9 @@ export function createPreviewTutor(request,storage=globalThis.sessionStorage) {
        }
       }
       if(disposed)return;
+      emit('tool.complete',{tool_id:toolId,name:'learning_course_read',duration_s:0.6});
+      const done={revision:Date.now(),todos:plan.todos.map(item=>({...item,status:'completed'}))};save(sid+':plan',done);emit('todo.updated',done);
+      history.push({role:'assistant',text:'',reasoning:'Simulated progress: review the saved path, then prepare an example for the learner.'},{role:'tool',name:'learning_course_read',tool_call_id:toolId});
       emit('message.delta',{text:reply});history.push({role:'assistant',text:reply});save(sid,history);timer=null;emit('message.complete',{text:reply,status:'complete'});
      }catch(e){timer=null;emit('message.complete',{status:'error',error:e.message,text:''});}
     },600);

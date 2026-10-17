@@ -24,6 +24,10 @@ The tutor chooses reasonable starting assumptions and displays them with the les
 
 Desktop shows the path, lesson, and collapsible tutor together. On narrow screens, Path, Lesson, and Tutor tabs switch panels while preserving the draft and panel scroll state. The interface follows the host/system theme, with a theme control in its header.
 
+The tutor shows expandable **Thinking** blocks, tool activity, and a **Tutor’s plan** checklist when Hermes supplies them. Tool calls show running, done, failed, stopped, or unconfirmed states. Restored tool rows say **Finished** because the compact host history does not include their original result. Thinking is shown only when exposed by the model/session; the plugin does not create an inferred thought process or plan. History restores the detail Hermes has saved; live reasoning not yet saved may be unavailable after reconnect.
+
+Use **Expand tutor** on desktop for more room. Enter sends a message; Shift + Enter adds a line. Incoming updates follow the bottom of the conversation until you scroll up; **Jump to latest** returns to the newest activity.
+
 Tutor requests use the configured Hermes session. Required tool permissions and clarifications appear in the tutor panel and wait for the learner's response; they are never silently approved.
 
 ## Change a lesson or roadmap

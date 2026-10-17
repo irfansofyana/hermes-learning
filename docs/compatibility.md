@@ -21,6 +21,12 @@ Lessons and tutor replies support CommonMark plus GitHub-style tables, task list
 
 The rich-lesson pass was checked against the same isolated Hermes v0.22.2 host: a configured model saved a Python lesson with a five-step code trace and completed its generation job. Actual Electron restored that lesson, rendered syntax tokens, copied code, and stepped through the trace without page errors. Disposable preview checks covered all three visual types, keyboard controls, code copying, footnote return links, legacy practice gates, and light desktop/dark mobile layouts. Browser plugin was unavailable, so these checks used Playwright.
 
+## Tutor activity and chat controls
+
+On 2026-10-17, the tutor gained expandable exposed reasoning and tool activity, a revision-guarded plan checklist, desktop expansion, keyboard sending, and scrolling that preserves the learner’s position. Events and history fields were checked against the same local Hermes gateway contracts: `reasoning.delta`, `reasoning.available`, `tool.start`, `tool.complete`, `tool.generating`, `todo.updated`, `status.update`, and explained waits from `thinking.delta`. Saved history restores exposed reasoning/tool rows; `todo_state` restores the latest plan. Raw tool arguments and results are not rendered. Compact historical tool rows do not establish success and are labelled Finished.
+
+All 86 UI tests and both production builds passed. The labelled simulated-preview browser checks verified thinking disclosure, tool and plan restoration, expansion, Enter/Shift+Enter, scroll preservation, mobile dark layout, and the existing read/unread and proposal flows without page errors. This pass made no external model calls and does not add a new native Electron/live-model verification claim. The host controls reasoning visibility and tool-progress emission; absent detail is not fabricated, and unsaved in-flight reasoning may not survive reconnect.
+
 ## Conversational updates
 
 The update contract adds course revisions and pending proposals while retaining API/schema version 1. The tutor can propose lesson rewrites, roadmap revisions, extensions and regeneration; the plugin reviews and applies or dismisses them. Pending proposals persist across reload. Applying a stale revision conflicts without changing current content. Unchanged lessons retain progress, revised lessons clear their read marks, extensions keep existing progress, and regeneration resets it. Sources and the tutor conversation remain attached.

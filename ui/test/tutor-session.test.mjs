@@ -34,3 +34,56 @@ test('conversation prompts authorize proposals for requested edits and carry aut
  assert.match(prompt,/learning_course_propose/);assert.match(prompt,/"revision":3/);assert.match(prompt,/"target":"lesson"/);
  assert.match(prompt,/Apply changes/);assert.doesNotMatch(prompt,/call learning_course_apply/);
 });
+test('streams exposed thinking and correlated tools without replacing the reply',async()=>{
+ const f=fixture();await f.session.send('Explain',context);
+ f.emit('reasoning.delta',{text:'Compare the examples.'},'foreign');
+ assert.equal(f.session.state.messages.length,1);
+ f.emit('reasoning.delta',{text:'Compare '});f.emit('reasoning.delta',{text:'the examples.'});
+ f.emit('tool.start',{tool_id:'a',name:'learning_course_read',args:{context_id:'private'}});
+ f.emit('tool.start',{tool_id:'b',name:'web_search'});
+ f.emit('tool.complete',{tool_id:'b',name:'web_search',result:{error:'Search unavailable'}});
+ f.emit('tool.complete',{tool_id:'a',name:'learning_course_read',duration_s:1.2});
+ f.emit('message.delta',{text:'Here is the example.'});
+ const messages=f.session.state.messages;
+ assert.equal(messages.find(m=>m.kind==='reasoning').text,'Compare the examples.');
+ assert.equal(messages.find(m=>m.toolId==='a').status,'complete');
+ assert.equal(messages.find(m=>m.toolId==='b').status,'error');
+ assert.equal(messages.at(-1).text,'Here is the example.');
+ assert.ok(!JSON.stringify(messages).includes('private'));f.session.dispose();
+});
+test('plan snapshots are revision guarded and restored without a model request',async()=>{
+ const f=fixture({'session.resume':()=>({session_id:'live',messages:[],running:false,todo_state:{revision:3,todos:[{id:'a',content:'Read source',status:'completed'}]}})});
+ await f.session.restore({session_id:'saved',scope:'scope'},context);
+ assert.equal(f.session.state.plan.todos[0].status,'completed');
+ f.emit('todo.updated',{revision:2,todos:[{id:'a',content:'Old',status:'pending'}]});
+ assert.equal(f.session.state.plan.revision,3);
+ f.emit('todo.updated',{revision:4,todos:[]});assert.deepEqual(f.session.state.plan.todos,[]);
+ f.session.clear();assert.equal(f.session.state.plan,null);f.session.dispose();
+});
+test('restored host reasoning and tool rows remain visible without raw tool arguments',()=>{
+ const history=visibleHistory([{role:'assistant',text:'',reasoning:'Compare options.'},{role:'tool',name:'web_search',tool_call_id:'t',context:'queue docs',args:{secret:'not for display'}},{role:'assistant',text:'Answer'},{role:'assistant',display_kind:'hidden',reasoning:'hidden'}]);
+ assert.equal(history[0].kind,'reasoning');assert.equal(history[0].text,'Compare options.');
+ assert.equal(history[1].kind,'tool');assert.equal(history[1].status,'finished');
+ assert.equal(history[2].text,'Answer');assert.ok(!JSON.stringify(history).includes('not for display'));
+});
+test('stop and disconnect leave tool results unconfirmed, never successful',async()=>{
+ const f=fixture();await f.session.send('Explain',context);f.emit('tool.start',{tool_id:'a',name:'web_search'});
+ await f.session.stop();assert.equal(f.session.state.messages.find(m=>m.toolId==='a').status,'interrupted');f.session.dispose();
+ const g=fixture();await g.session.send('Explain',context);g.emit('tool.start',{tool_id:'b',name:'web_search'});g.emit('transport.disconnected');
+ assert.equal(g.session.state.messages.find(m=>m.toolId==='b').status,'unknown');g.session.dispose();
+});
+test('waiting notices are status updates, not model reasoning',async()=>{
+ const f=fixture();await f.session.send('Explain',context);
+ f.emit('thinking.delta',{text:'⏳ waiting on the provider'});
+ assert.equal(f.session.state.status,'⏳ waiting on the provider');
+ assert.equal(f.session.state.messages.length,1);
+ f.emit('status.update',{kind:'compacting',text:'Compacting conversation'});
+ assert.equal(f.session.state.status,'Compacting conversation');f.session.dispose();
+});
+test('a late plan snapshot cannot replace newer state after another send',async()=>{
+ const f=fixture();await f.session.send('Explain',{...context,job_id:undefined});
+ f.emit('todo.updated',{revision:10,todos:[{id:'a',content:'Current',status:'completed'}]});await f.session.finish();
+ await f.session.send('Another question',{...context,job_id:undefined});
+ f.emit('todo.updated',{revision:9,todos:[{id:'a',content:'Old',status:'pending'}]});
+ assert.equal(f.session.state.plan.revision,10);f.session.dispose();
+});

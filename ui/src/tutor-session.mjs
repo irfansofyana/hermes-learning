@@ -1,3 +1,4 @@
+import {activityText,historyReasoning,toolActivity,toolLabel,planSnapshot} from './tutor-activity.mjs';
 // The host owns conversations; Learning owns lessons and scoped generation jobs.
 const PREFIX = '[Hermes Learning context]\n';
 const END = '\n[/Hermes Learning context]\n\n';
@@ -24,19 +25,24 @@ export function tutorPrompt(text, context) {
  return PREFIX+instructions+'\nScoped learning data (JSON):\n'+JSON.stringify(data)+END+text;
 }
 export function visibleHistory(messages=[]) {
- return messages.filter(m=>['user','assistant'].includes(m.role)&&m.display_kind!=='hidden').map((m,i)=>{
+ return messages.flatMap((m,i)=>{
+  if(m.display_kind==='hidden')return [];
+  const key=String(m.row_id??m.id??`history-${i}`);
+  if(m.role==='tool')return m.name?[{id:key,...toolActivity(m,'finished')}]:[];
+  if(!['user','assistant'].includes(m.role))return [];
   let text=typeof m.text==='string'?m.text:typeof m.content==='string'?m.content:'';
   if(m.role==='user'&&text.startsWith(PREFIX)){const end=text.indexOf(END);text=end<0?'':text.slice(end+END.length);}
-  return {id:String(m.row_id??m.id??`history-${i}`),role:m.role,text};
- }).filter(m=>m.text.trim());
+  const reasoning=m.role==='assistant'?historyReasoning(m):'';
+  return [...(reasoning?[{id:key+'-reasoning',role:'activity',kind:'reasoning',text:reasoning,status:'complete'}]:[]),...(text.trim()?[{id:key,role:m.role,text}]:[])];
+ });
 }
 export class TutorSession {
  constructor({transport,request,scope,profile,onState=()=>{},onChange=()=>{},pollMs=2500}) {
   Object.assign(this,{transport,request,scope,profile,onState,onChange,pollMs});
   this.epoch=0;this.runtime=null;this.binding=null;this.context=null;this.uncertain=false;this.disposed=false;this.polling=false;this.preparing=false;
-  this.state={messages:[],busy:false,status:'Ready',error:'',pending:null};
+  this.state={messages:[],busy:false,status:'Ready',error:'',pending:null,plan:null};
   this.unsub=[];
-  for(const type of ['message.start','message.delta','message.interim','message.complete','error','tool.start','tool.complete','approval','clarify','request.cancel','transport.disconnected'])
+  for(const type of ['message.start','message.delta','message.interim','message.complete','error','tool.start','tool.complete','tool.generating','reasoning.delta','reasoning.available','thinking.delta','status.update','todo.updated','approval','clarify','request.cancel','transport.disconnected'])
    this.unsub.push(transport?.onEvent(type,event=>this.event(type,event))||(()=>{}));
   if(pollMs)this.timer=setInterval(()=>{if(this.runtime&&this.state.busy)this.reconcile().catch(()=>{});},pollMs);
  }
@@ -44,7 +50,7 @@ export class TutorSession {
  params(values){return {...(this.profile?{profile:this.profile}:{}),...values};}
  action(action,params){return this.request('/action',{api_version:1,action,params});}
  valid(epoch){return !this.disposed&&epoch===this.epoch;}
- clear(){this.epoch++;this.runtime=null;this.binding=null;this.context=null;this.preparing=false;this.finishing=null;this.streamId=null;this.uncertain=false;this.transport?.setSession?.(null);this.patch({messages:[],busy:false,status:'Ready',error:'',pending:null});}
+ clear(){this.epoch++;this.runtime=null;this.binding=null;this.context=null;this.preparing=false;this.finishing=null;this.streamId=null;this.reasoningId=null;this.uncertain=false;this.transport?.setSession?.(null);this.patch({messages:[],busy:false,status:'Ready',error:'',pending:null,plan:null});}
  async restore(binding,context={}) {
   if(this.disposed)throw Error('This tutor is closed.');
   this.clear();this.context=context;
@@ -58,6 +64,7 @@ export class TutorSession {
    if(!this.valid(epoch))return;
    if(!result.session_id)throw Error('Hermes did not return a conversation.');
    this.runtime=result.session_id;this.binding={...binding,session_id:result.stored_session_id||binding.session_id};this.transport.setSession?.(this.runtime);
+   this.updatePlan(result.todo_state);
    this.patch({messages:visibleHistory(result.messages),busy:!!result.running,status:result.running?'Tutor is working':'Ready'});
    if(result.inflight?.assistant)this.append(result.inflight.assistant,true);
    this.pendingFrom(result);
@@ -91,7 +98,7 @@ export class TutorSession {
    if(!this.valid(epoch))return;
    await this.changed();
    if(!this.valid(epoch))return;
-   this.streamId=null;
+   this.streamId=null;this.reasoningId=null;
    this.patch({messages:[...this.state.messages,{id:id(),role:'user',text}],status:context.job_id?'Generating your lesson':'Thinking'});
    submitted=true;
    const result=await this.transport.request('prompt.submit',this.params({session_id:this.runtime,text:tutorPrompt(text,context)}));
@@ -100,7 +107,7 @@ export class TutorSession {
    if(result.status==='queued'||result.status==='steered')this.patch({status:'Waiting for the current turn'});
   }catch(e){
    if(this.valid(epoch)){
-    this.preparing=false;this.uncertain=submitted;
+    this.preparing=false;this.endActivity();this.uncertain=submitted;
     this.patch({busy:false,status:submitted?'Delivery uncertain':'Could not start',error:submitted?`${e.message} Reconnect to check whether Hermes received your request before sending again.`:e.message});
     if(!submitted)await this.markJob('failed',e.message);
    }
@@ -114,24 +121,61 @@ export class TutorSession {
   else messages[index]={...messages[index],text:replace?text:messages[index].text+text};
   this.patch({messages});
  }
+ updatePlan(payload){const plan=planSnapshot(payload,this.state.plan);if(plan!==this.state.plan)this.patch({plan});}
+ endActivity(status='unknown'){
+  this.reasoningId=null;
+  this.patch({messages:this.state.messages.map(m=>m.status==='running'?{...m,status:m.kind==='reasoning'?'complete':status}:m)});
+ }
+ reasoning(text,replace=false){
+  text=activityText(text);if(!text)return;
+  const messages=[...this.state.messages],index=messages.findIndex(m=>m.id===this.reasoningId);
+  if(index<0){this.reasoningId=id();messages.push({id:this.reasoningId,role:'activity',kind:'reasoning',text,status:'running'});}
+  else messages[index]={...messages[index],text:replace?text:activityText(messages[index].text+text)};
+  this.patch({messages,status:'Thinking'});
+ }
+ tool(payload,complete=false){
+  if(!payload.tool_id)return;
+  this.closeReasoning();
+  const messages=[...this.state.messages],index=messages.findIndex(m=>m.kind==='tool'&&m.toolId===payload.tool_id);
+  const next=toolActivity(payload,complete?'complete':'running');
+  if(index<0)messages.push({id:id(),...next});
+  else if(complete||messages[index].status==='running')messages[index]={...messages[index],...next,detail:next.detail||messages[index].detail};
+  const running=messages.findLast(m=>m.kind==='tool'&&m.status==='running');
+  this.patch({messages,status:running?running.label:'Thinking'});
+  if(complete)this.updatePlan(payload);
+ }
+ closeReasoning(){
+  if(!this.reasoningId)return;
+  const key=this.reasoningId;this.reasoningId=null;
+  this.patch({messages:this.state.messages.map(m=>m.id===key?{...m,status:'complete'}:m)});
+ }
  event(type,event={}){
   if(this.disposed)return;
   if(type==='transport.disconnected'){
-   if(this.state.busy){this.uncertain=true;this.patch({busy:false,status:'Disconnected',error:'Connection lost. Reconnect to restore the conversation before sending again.'});}return;
+   if(this.state.busy){this.endActivity();this.uncertain=true;this.patch({busy:false,status:'Disconnected',error:'Connection lost. Reconnect to restore the conversation before sending again.'});}return;
   }
   if(!this.runtime||event.session_id!==this.runtime)return;
   if(this.profile&&event.profile&&event.profile!==this.profile)return;
   const p=event.payload||{};
   if(type==='request.cancel'){if(!p.id||p.id===this.state.pending?.requestId)this.patch({pending:null});}
   else if(type==='message.start')this.patch({busy:true,status:'Thinking'});
-  else if(type==='message.delta'){this.append(p.text);this.patch({status:'Responding'});}
-  else if(type==='message.interim'){if(!p.already_streamed)this.append(p.text,true);this.streamId=null;}
-  else if(type==='tool.start')this.patch({status:'Working with your material'});
-  else if(type==='tool.complete')this.changed();
+  else if(type==='message.delta'){this.closeReasoning();this.append(p.text);this.patch({status:'Responding'});}
+  else if(type==='message.interim'){this.closeReasoning();if(!p.already_streamed)this.append(p.text,true);this.streamId=null;}
+  else if(type==='reasoning.delta')this.reasoning(p.text);
+  else if(type==='thinking.delta'||type==='status.update'){
+   const notice=typeof p.text==='string'?p.text.trim():'';
+   const explained=type==='status.update'||/^(?:⏳|⚠|↻|⚙)\s*(?:(?:still\s+)?waiting on|loading|processing prompt|no (?:output|response)|model returned|rate limited|provider (?:overloaded|temporarily unavailable))/i.test(notice);
+   if(this.state.busy&&!this.state.pending&&notice&&explained)this.patch({status:notice.slice(0,500)});
+  }
+  else if(type==='reasoning.available')this.reasoning(p.text,true);
+  else if(type==='todo.updated')this.updatePlan(p);
+  else if(type==='tool.generating')this.patch({status:`Preparing: ${toolLabel(p.name)}`});
+  else if(type==='tool.start')this.tool(p);
+  else if(type==='tool.complete'){this.tool(p,true);this.changed();}
   else if(type==='message.complete'){
    if(p.text&&!p.response_reused)this.append(p.text,true);
    this.finish(p).catch(()=>{});
-  }else if(type==='error'){this.patch({busy:false,status:'Tutor unavailable',error:p.message||'The tutor could not complete this request.'});this.markJob('failed',p.message||'Tutor failed').catch(()=>{});}
+  }else if(type==='error'){this.endActivity();this.patch({busy:false,status:'Tutor unavailable',error:p.message||'The tutor could not complete this request.'});this.markJob('failed',p.message||'Tutor failed').catch(()=>{});}
   else if(type==='approval'||type==='clarify')this.pendingFrom({open_requests:[{id:p.id,method:type,params:p}]});
  }
  pendingFrom(snapshot){
@@ -171,6 +215,7 @@ export class TutorSession {
  }
  async finish(payload={}){
   if(this.finishing)return;
+  this.endActivity(payload.status==='interrupted'?'interrupted':'unknown');
   const epoch=this.epoch,c=this.context,token={};this.finishing=token;
   let status=payload.status==='interrupted'?'Stopped':'Ready';
   let error=payload.status==='error'?(payload.error||payload.failure_reason||'Tutor request failed.'):'';
@@ -199,7 +244,7 @@ export class TutorSession {
   try{
    const result=await this.transport.request('session.activate',this.params({session_id:this.runtime,omit_messages:true}));
    if(!this.valid(epoch))return;
-   this.pendingFrom(result);
+   this.pendingFrom(result);this.updatePlan(result.todo_state);
    if(result.inflight?.assistant)this.append(result.inflight.assistant,true);
    if(result.running===false&&this.state.busy){
     const history=await this.transport.request('session.history',this.params({session_id:this.runtime}));
@@ -207,7 +252,7 @@ export class TutorSession {
     if(history.messages?.length)this.patch({messages:visibleHistory(history.messages)});
     await this.finish(result.inflight?.error?{status:'error',error:result.inflight.error}:{});
    }
-  }catch(e){if(this.valid(epoch)){this.uncertain=true;this.patch({busy:false,status:'Disconnected',error:`Could not check the tutor: ${e.message}. Reconnect before sending again.`});}}
+  }catch(e){if(this.valid(epoch)){this.endActivity();this.uncertain=true;this.patch({busy:false,status:'Disconnected',error:`Could not check the tutor: ${e.message}. Reconnect before sending again.`});}}
   finally{this.polling=false;}
  }
  async stop(){
@@ -218,8 +263,8 @@ export class TutorSession {
   try{
    if(runtime)await this.transport.request('session.interrupt',this.params({session_id:runtime}));
    if(!this.valid(epoch))return;
-   this.patch({busy:false,status:'Stopped',pending:null});await this.markJob('stopped');
-  }catch(e){if(this.valid(epoch)){this.uncertain=true;this.patch({busy:false,error:`Could not confirm the tutor stopped: ${e.message}. Reconnect before sending again.`});}throw e;}
+   this.endActivity('interrupted');this.patch({busy:false,status:'Stopped',pending:null});await this.markJob('stopped');
+  }catch(e){if(this.valid(epoch)){this.endActivity();this.uncertain=true;this.patch({busy:false,error:`Could not confirm the tutor stopped: ${e.message}. Reconnect before sending again.`});}throw e;}
  }
  dispose(){this.disposed=true;this.epoch++;clearInterval(this.timer);for(const off of this.unsub)off();}
 }

@@ -2,9 +2,10 @@ import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {clearLegacyStorage} from './retire-legacy.mjs';
 import {LearningMark} from './LearningMark.jsx';
 import {Icon} from './icons.jsx';
+import {TutorPanel} from './TutorPanel.jsx';
 import {useTutor} from './useTutor.jsx';
-import {ChangeRequestDialog,CourseProposals} from './CourseChanges.jsx';
-import CourseContent,{Markdown,safeCourseURL} from './CourseContent.jsx';
+import {ChangeRequestDialog} from './CourseChanges.jsx';
+import CourseContent,{safeCourseURL} from './CourseContent.jsx';
 import {SOURCE_ACCEPT} from './learning.mjs';
 import {readCourseFiles,linkMaterial,prepareCourse} from './course-input.mjs';
 import css from './learning-workspace.css';
@@ -13,20 +14,7 @@ const errorText=error=>error?.message||'Something went wrong. Your saved work is
 const sourceStatus=source=>source.retrieval_error?`${source.read_status||'Not read'} · ${source.retrieval_error}`:source.read_status==='provided'?'Text supplied':source.read_status==='unread'||(!source.excerpt&&source.url)?'Link · not read':source.read_status||'Text supplied';
 function Button({children,primary=false,icon,className='',...props}){return <button className={`lw-button ${primary?'lw-primary':''} ${className}`} {...props}>{icon&&<Icon name={icon}/>}<span>{children}</span></button>;}
 function SourceList({items,onRemove}){return <ul className="lw-source-list">{items.map((item,i)=><li key={item.id||i} className={item.error?'has-error':''}><Icon name={item.material?.url?'link':'file'}/><div><strong>{item.title||item.material?.title}</strong><span>{item.error||sourceStatus(item.material||item)}</span></div>{onRemove&&<button type="button" className="lw-icon-button" aria-label={`Remove ${item.title||item.material?.title}`} onClick={()=>onRemove(i)}><Icon name="close" size={15}/></button>}</li>)}</ul>;}
-function TutorPanel({tutor,draft,setDraft,onSend,onClose,onReconnect,course,onApply,onDismiss,operating}){
- const [answer,setAnswer]=useState(''),end=useRef(null);
- useEffect(()=>{end.current?.scrollIntoView({block:'nearest'});},[tutor.messages,tutor.status]);
- useEffect(()=>setAnswer(''),[tutor.pending?.requestId]);
- const pending=tutor.pending;
- return <aside className="lw-tutor" aria-label="Path tutor"><header><div className="lw-tutor-name"><span className="lw-tutor-symbol"><Icon name="spark" size={19}/></span><div><h2>Your tutor</h2><span>Here for this learning path</span></div></div><button className="lw-icon-button" aria-label="Close tutor" onClick={onClose}><Icon name="close"/></button></header>
- <div className="lw-conversation" role="log" aria-label="Tutor conversation" aria-live="polite">{!tutor.messages?.length&&<div className="lw-tutor-welcome"><Icon name="chat" size={26}/><h3>Ask about this lesson.</h3><p>Ask about the lesson, work through an example, or get a hint when you need one.</p><p>Your conversation stays with this path.</p></div>}{tutor.messages?.map((message,i)=><article key={message.id||i} className={`lw-message is-${message.role}`}><span className="lw-message-role">{message.role==='user'?'You':'Hermes'}</span><Markdown content={message.text}/></article>)}<div ref={end}/></div>
- {(tutor.busy||tutor.status&&tutor.status!=='idle')&&<div className="lw-tutor-status" role="status"><span className={tutor.busy?'lw-live-dot':''}/>{({preparing:'Preparing your tutor…',generating:'Generating…',streaming:'Writing…',stopped:'Stopped. Your saved lessons are kept.',failed:'The tutor could not finish.',ready:'Ready',waiting:'Waiting for your response',permission:'Waiting for permission'})[tutor.status]||String(tutor.status||'Working…').replaceAll('_',' ')}{tutor.busy&&<button onClick={()=>tutor.stop().catch(()=>{})}>Stop</button>}</div>}
- {tutor.error&&<div className="lw-inline-error" role="alert"><p>{typeof tutor.error==='string'?tutor.error:errorText(tutor.error)}</p><Button onClick={onReconnect} disabled={tutor.busy}>Reconnect tutor</Button></div>}
- {pending&&<section className="lw-permission"><h3>{pending.kind==='approval'?'Your permission is needed':'A question from your tutor'}</h3><p>{pending.question}</p>{pending.details&&<details><summary>View request details</summary><pre>{typeof pending.details==='string'?pending.details:JSON.stringify(pending.details,null,2)}</pre></details>}{pending.kind==='approval'?<div className="lw-button-row"><Button onClick={()=>tutor.respond('deny').catch(()=>{})}>Deny</Button><Button primary disabled={!pending.options?.includes('once')} onClick={()=>tutor.respond('once').catch(()=>{})}>Allow once</Button></div>:<form onSubmit={e=>{e.preventDefault();if(answer.trim())tutor.respond(answer).catch(()=>{});}}>{pending.options?.map((option,i)=><Button type="button" key={i} onClick={()=>tutor.respond(typeof option==='string'?option:option.value||option.label).catch(()=>{})}>{typeof option==='string'?option:option.label||option.value}</Button>)}<label className="lw-sr-only" htmlFor="lw-clarification">Your response</label><input id="lw-clarification" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Your response"/><Button primary disabled={!answer.trim()}>Send response</Button></form>}</section>}
- <CourseProposals course={course} onApply={onApply} onDismiss={onDismiss} busy={tutor.busy||operating}/>
- <form className="lw-composer" onSubmit={e=>{e.preventDefault();onSend();}}><label className="lw-sr-only" htmlFor="lw-tutor-draft">Message your tutor</label><textarea id="lw-tutor-draft" placeholder="Ask about this lesson…" value={draft} onChange={e=>setDraft(e.target.value)} rows={3} disabled={!!pending}/><div><span>Your tutor uses the current lesson.</span><button className="lw-send" aria-label="Send message" disabled={tutor.busy||!!pending||!draft.trim()}><Icon name="arrow" size={18}/></button></div></form>
- </aside>;
-}
+
 export default function LearningApp({request,transport,scope='learning',profile,preview=false}){
  const [state,setState]=useState(null),[view,setView]=useState('home'),[course,setCourse]=useState(null),[context,setContext]=useState(null),[selected,setSelected]=useState(''),[error,setError]=useState(''),[operating,setOperating]=useState(false),[theme,setTheme]=useState('auto');
  const [prompt,setPrompt]=useState(''),[level,setLevel]=useState('beginner'),[items,setItems]=useState([]),[linkOpen,setLinkOpen]=useState(false),[link,setLink]=useState(''),[sourceError,setSourceError]=useState(''),[importing,setImporting]=useState(false);
