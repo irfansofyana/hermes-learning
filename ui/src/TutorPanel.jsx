@@ -1,7 +1,6 @@
 import React,{useEffect,useRef,useState} from 'react';
 import {Icon} from './icons.jsx';
 import {Markdown} from './CourseContent.jsx';
-import {CourseProposals} from './CourseChanges.jsx';
 const errorText=error=>error?.message||'Something went wrong.';
 function Button({children,primary=false,...props}){return <button className={`lw-button ${primary?'lw-primary':''}`} {...props}><span>{children}</span></button>;}
 const statusLabel={running:'Running',complete:'Done',finished:'Finished',error:'Failed',interrupted:'Stopped',unknown:'Unconfirmed'};
@@ -14,7 +13,7 @@ export function TutorPlan({plan}){
  const completed=plan.todos.filter(item=>item.status==='completed').length;
  return <details className="lw-tutor-plan" open><summary><Icon name="file" size={14}/><span>Tutor’s plan</span><small>{completed}/{plan.todos.length}</small></summary><ol>{plan.todos.map(item=><li key={item.id} className={`is-${item.status}`}><Icon name={item.status==='completed'?'check':item.status==='cancelled'?'close':item.status==='in_progress'?'play':'clock'} size={13}/><span>{item.content}</span><span className="lw-sr-only">{item.status.replaceAll('_',' ')}</span></li>)}</ol></details>;
 }
-export function TutorPanel({tutor,draft,setDraft,onSend,onClose,onReconnect,course,onApply,onDismiss,operating,modelPicker}){
+export function TutorPanel({tutor,draft,setDraft,onSend,onClose,onReconnect,course,operating,modelPicker}){
  const [answer,setAnswer]=useState(''),[away,setAway]=useState(false),[wide,setWide]=useState(false),log=useRef(null),follow=useRef(true);
  const jump=()=>{if(log.current)log.current.scrollTop=log.current.scrollHeight;follow.current=true;setAway(false);};
  useEffect(()=>{follow.current=true;setAway(false);},[course?.track?.id]);
@@ -28,7 +27,6 @@ export function TutorPanel({tutor,draft,setDraft,onSend,onClose,onReconnect,cour
  {(tutor.busy||tutor.status&&tutor.status!=='idle')&&<div className="lw-tutor-status" role="status"><span className={tutor.busy?'lw-live-dot':''}/>{({preparing:'Preparing your tutor…',generating:'Generating…',streaming:'Writing…',stopped:'Stopped. Your saved lessons are kept.',failed:'The tutor could not finish.',ready:'Ready',waiting:'Waiting for your response',permission:'Waiting for permission'})[tutor.status]||String(tutor.status||'Working…').replaceAll('_',' ')}{tutor.busy&&<button onClick={()=>tutor.stop().catch(()=>{})}>Stop</button>}</div>}
  {tutor.error&&<div className="lw-inline-error" role="alert"><p>{typeof tutor.error==='string'?tutor.error:errorText(tutor.error)}</p><Button onClick={onReconnect} disabled={tutor.busy}>Reconnect tutor</Button></div>}
  {pending&&<section className="lw-permission"><h3>{pending.kind==='approval'?'Your permission is needed':'A question from your tutor'}</h3><p>{pending.question}</p>{pending.details&&<details><summary>View request details</summary><pre>{typeof pending.details==='string'?pending.details:JSON.stringify(pending.details,null,2)}</pre></details>}{pending.kind==='approval'?<div className="lw-button-row"><Button onClick={()=>tutor.respond('deny').catch(()=>{})}>Deny</Button><Button primary disabled={!pending.options?.includes('once')} onClick={()=>tutor.respond('once').catch(()=>{})}>Allow once</Button></div>:<form onSubmit={e=>{e.preventDefault();if(answer.trim())tutor.respond(answer).catch(()=>{});}}>{pending.options?.map((option,i)=><Button type="button" key={i} onClick={()=>tutor.respond(typeof option==='string'?option:option.value||option.label).catch(()=>{})}>{typeof option==='string'?option:option.label||option.value}</Button>)}<label className="lw-sr-only" htmlFor="lw-clarification">Your response</label><input id="lw-clarification" value={answer} onChange={e=>setAnswer(e.target.value)} placeholder="Your response"/><Button primary disabled={!answer.trim()}>Send response</Button></form>}</section>}
- <CourseProposals course={course} onApply={onApply} onDismiss={onDismiss} busy={tutor.busy||operating}/>
  <form className="lw-composer" onSubmit={e=>{e.preventDefault();send();}}><label className="lw-sr-only" htmlFor="lw-tutor-draft">Message your tutor</label><textarea id="lw-tutor-draft" placeholder="Ask about this lesson…" value={draft} onChange={e=>setDraft(e.target.value)} rows={3} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(!operating&&!tutor.busy&&!pending&&draft.trim())send();}}} disabled={!!pending}/><div><span>Enter to send · Shift + Enter for a new line</span><button className="lw-send" aria-label="Send message" disabled={operating||tutor.busy||!!pending||!draft.trim()}><Icon name="arrow" size={18}/></button></div></form>
  </aside>;
 }
