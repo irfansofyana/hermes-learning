@@ -32,3 +32,6 @@
 @media(min-width:661px) and (max-width:960px){.lw-workspace.with-tutor .lw-tutor.is-wide{width:min(620px,85vw)}}
 @media(max-width:660px){.lw-tutor-expand{display:none!important}}
 .lw-tutor .lw-message .lw-markdown{font-size:13px}.lw-tutor .lw-activity,.lw-tutor .lw-tutor-plan{font-size:12px}.lw-tutor h2{font-size:13px}.lw-tutor .lw-tutor-status{font-size:11px;overflow-wrap:anywhere}.lw-tutor .lw-tutor-status>button{flex-shrink:0}.lw-tool summary:after{content:'+';font-size:12px;padding-left:3px}.lw-tool[open] summary:after{content:'−'}
+/* Desktop disables selection on its app body; Learning is a reading surface. */
+.lw-root{-webkit-user-select:text;user-select:text}
+.lw-root button,.lw-root [role=button],.lw-root select{-webkit-user-select:none;user-select:none}
