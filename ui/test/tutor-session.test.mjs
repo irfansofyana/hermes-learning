@@ -8,6 +8,15 @@ function fixture(overrides={}) {
  return{session,calls,actions,emit:(type,payload={},sid='live')=>listeners.get(type)?.({session_id:sid,payload})};
 }
 const context={track_id:'track',context_id:'context',job_id:'job',course:{track:{title:'Queues'},sources:[],outline:[]}};
+test('path naming is scoped to supported generation and carries saved naming status',()=>{
+ const course={...context.course,capabilities:['path-titles-v1'],track:{title:'I want to learn Kafka',interest:'I want to learn Kafka'}};
+ assert.match(tutorPrompt('Generate',{...context,course}),/Include path_title/);
+ assert.doesNotMatch(tutorPrompt('Explain',{...context,job_id:undefined,course}),/During this generation, name/);
+ assert.doesNotMatch(tutorPrompt('Generate',context),/During this generation, name/);
+ const named=tutorPrompt('Generate',{...context,course:{...course,track:{...course.track,title:'Kafka Fundamentals',title_generated:true}}});
+ assert.match(named,/"title_generated":true/);
+ assert.doesNotMatch(named,/During this generation, name/);
+});
 test('creates and binds durable session before one contextual submit',async()=>{const f=fixture();await f.session.send('Build a queue',context);assert.equal(f.calls.filter(c=>c.method==='prompt.submit').length,1);assert.equal(f.actions[0].action,'course_bind');assert.equal(f.actions[0].params.session_id,'saved');assert.match(f.calls.at(-1).params.text,/learning_course_plan/);assert.equal(f.session.state.messages[0].text,'Build a queue');assert.equal(f.session.state.busy,true);f.session.dispose();});
 test('restores history and uses runtime ID without sending a prompt',async()=>{const f=fixture();await f.session.restore({session_id:'saved',scope:'scope'},context);assert.equal(f.session.state.messages[0].text,'Earlier lesson');assert.equal(f.calls.filter(c=>c.method==='prompt.submit').length,0);await f.session.send('Explain', {...context,job_id:undefined});assert.equal(f.calls.at(-1).params.session_id,'branch-live');f.session.dispose();});
 test('rejects binding from another connection scope',async()=>{const f=fixture();await assert.rejects(f.session.restore({session_id:'saved',scope:'other'},context),/different/);assert.equal(f.calls.length,0);f.session.dispose();});

@@ -6,7 +6,7 @@ A personal learning workspace for [Hermes Agent](https://github.com/NousResearch
 
 ## What you can do
 
-- **Start learning immediately.** Enter what you want to learn or build, optionally choose a level, and generate an outline and a complete first lesson.
+- **Start learning immediately.** Enter what you want to learn or build, optionally choose a level, and generate a concise path name, an outline and a complete first lesson. Your full request stays saved as the description.
 - **Bring your own material.** Attach multiple text, Markdown, or code files, or add source and repository links. Each source shows whether its text is available or retrieval failed.
 - **Read and ask in one place.** Follow lessons with formatted Markdown, tables, highlighted code you can copy, and step-by-step sequence diagrams, state machines, or code traces. Ask for a simpler explanation or another example beside the lesson.
 - **Change a saved path.** Ask the tutor to rewrite a lesson, adjust the roadmap, add lessons, or regenerate the path. Review the summary and preview, then choose **Apply changes** or dismiss it. Ordinary questions leave saved lessons unchanged.

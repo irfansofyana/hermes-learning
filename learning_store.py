@@ -27,7 +27,7 @@ _media_spec.loader.exec_module(_media)
 API_VERSION = SCHEMA_VERSION = 1
 LEVELS = ['none', 'nudge', 'targeted-hint', 'worked-step', 'full-solution-shown']
 OUTCOMES = ['needs-work', 'developing', 'demonstrated']
-CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1', 'lesson-media-v1', 'lesson-continuity-v1']
+CAPABILITIES = ['integrated-courses-v1', 'objective-evidence-v1', 'generated-help-v1', 'structured-visuals-v1', 'lesson-media-v1', 'lesson-continuity-v1', 'path-titles-v1']
 WITHHELD = 'Content withheld by source-sharing policy.'
 READS = {'course_context', 'course_asset_read', 'course_diagram_render', 'practice_read', 'course_read', 'state', 'track', 'source_read', 'activity_read', 'resume_brief', 'export', 'quote_check'}
 WRITES = {'course_continuity_keep', 'course_asset_import', 'course_model', 'practice_submit', 'practice_bind', 'practice_status', 'practice_feedback', 'course_propose', 'course_apply', 'course_dismiss', 'course_source', 'course_start', 'course_open', 'course_generate', 'course_bind', 'course_position', 'course_plan', 'course_lesson', 'course_job_status', 'start', 'resume', 'leave', 'brief', 'approve', 'track_status', 'source', 'activity', 'run', 'help', 'submit', 'assess', 'dispute', 'review', 'recommendation', 'recommendation_decide', 'activity_revision'}
@@ -193,6 +193,12 @@ class Store:
                 details.append({'id': ident, 'title': title})
                 seen.add(ident)
         return {**track, 'objective_details': details, 'learner_profile': track.get('learner_profile', {})}
+
+    def _publish_path_title(self, db, track, title, now):
+        if title is None or track.get('title_generated'):
+            return
+        track.update(title=title, title_generated=True, revision=track['revision'] + 1, updated_at=now)
+        self._put(db, 'track', track, True)
 
     def _profile(self, value, previous=None):
         if not isinstance(value, dict) or set(value) - {'background', 'goal', 'minutes'}:
@@ -1134,6 +1140,11 @@ class Store:
             return self._course_job_view(job)
         if action in ('course_plan', 'course_lesson') and job.get('base_revision', 1) != course.get('revision', 1):
             fail('Course changed since this generation request; reload before publishing.', 'revision_conflict', 409)
+        path_title = None
+        if action in ('course_plan', 'course_lesson') and 'path_title' in p:
+            path_title = ' '.join(text(p['path_title'], 'path title', 100, True).split())
+            if track.get('title_generated') and track['title'] != path_title:
+                fail('This path already has a generated title', 'revision_conflict', 409)
         if action == 'course_plan':
             if not job['allow_outline']:
                 fail('This generation request does not authorize a new outline', 'job_scope', 403)
@@ -1153,6 +1164,8 @@ class Store:
                                 'goal': text(item['goal'], 'lesson goal', 2000, True)})
             publication = {'outline': cleaned, 'summary': text(p.get('summary'), 'summary', 12000, True),
                            'assumptions': strings(p.get('assumptions', []), 'assumptions')}
+            if path_title is not None:
+                publication['path_title'] = path_title
             digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
             if job.get('plan_hash'):
                 if job['plan_hash'] != digest:
@@ -1171,6 +1184,7 @@ class Store:
                 track.update(brief=publication['summary'], assumptions=publication['assumptions'], objectives=[item['goal'] for item in cleaned],
                              status='active', revision=track['revision'] + 1, updated_at=now)
                 self._put(db, 'track', track, True)
+            self._publish_path_title(db, track, path_title, now)
             return {'outline': cleaned}
         if action == 'course_lesson':
             key = text(p.get('lesson_key'), 'lesson_key', 80, True)
@@ -1192,8 +1206,11 @@ class Store:
                 fail('Use Markdown source links with the actual URL, not internal citation markers. Correct the content and retry this same job.', 'invalid_citation')
             publication = {'key': key, 'title': item['title'], 'content': content,
                            'source_ids': source_ids, 'visual': self._lesson_visual(p.get('visual')), **self._lesson_details(p)}
-            digest = hashlib.sha256(json.dumps(publication, sort_keys=True).encode()).hexdigest()
+            hashed_publication = {**publication, **({'path_title': path_title} if path_title is not None else {})}
+            digest = hashlib.sha256(json.dumps(hashed_publication, sort_keys=True).encode()).hexdigest()
             if job.get('lesson_hash'):
+                if job.get('lesson_path_title') != path_title:
+                    fail('Lesson already published with different path title metadata', 'revision_conflict', 409)
                 saved = self._lesson_view(self._get(db, 'lesson', job['lesson_id'], tid))
                 if job['lesson_hash'] != digest:
                     # Old lessons hashed activity-style visibility. Accept only
@@ -1212,6 +1229,9 @@ class Store:
             versions[key] = versions.get(key, 0) + 1
             lesson = self._new(track_id=tid, **publication, version=versions[key], job_id=job['id'], created_at=now)
             self._put(db, 'lesson', lesson)
+            self._publish_path_title(db, track, path_title, now)
+            if path_title is not None:
+                job['lesson_path_title'] = path_title
             order = [entry['key'] for entry in course['outline']]
             flags = dict(course.get('continuity_flags', {}))
             for later in self._all(db, 'lesson', tid):

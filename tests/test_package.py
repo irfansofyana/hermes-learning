@@ -1,6 +1,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import re
 import tempfile
 import unittest
 import zipfile
@@ -11,6 +12,19 @@ SPEC.loader.exec_module(packager)
 
 
 class PackageTests(unittest.TestCase):
+    def test_teaching_reference_links_resolve_in_release(self):
+        contents = packager.collect(Path(__file__).resolve().parents[1])
+        skill = contents['skills/teach/SKILL.md'].decode()
+        references = re.findall(r'\]\((references/[^)]+)\)', skill)
+        self.assertTrue(references, 'The teaching skill must expose its authoring examples')
+        for reference in references:
+            path = 'skills/teach/' + reference
+            self.assertIn(path, contents, 'A linked reference must reach installed plugins')
+            payload = json.loads(re.search(r'```json\n(.*?)\n```', contents[path].decode(), re.S)[1])
+            self.assertTrue(payload['content'])
+            self.assertTrue(payload['teaching']['outcome'])
+            self.assertTrue(payload['practice']['explanation'])
+
     def test_repository_root_is_an_installable_release(self):
         # The Git installer inspects the clone root, not a nested plugin/ folder.
         contents = packager.collect(Path(__file__).resolve().parents[1])

@@ -11,6 +11,57 @@ import runtime
 
 
 class CourseTests(unittest.TestCase):
+    def test_generated_path_title_replaces_prompt_and_survives_reopen(self):
+        prompt = 'I want to learn about Kafka and how consumer groups work'
+        start = self.start(interest=prompt)
+        self.plan(start, path_title='Kafka and Consumer Groups')
+        course = self.read(start)
+        self.assertEqual(course['track']['title'], 'Kafka and Consumer Groups')
+        self.assertTrue(course['track']['title_generated'])
+        self.assertEqual(course['track']['interest'], prompt)
+        self.assertEqual(self.call('state')['tracks'][0]['title'], 'Kafka and Consumer Groups')
+        self.lesson(start)
+        opened = self.call('course_open', track_id=start['track_id'])
+        self.assertEqual(self.read(opened)['track']['title'], 'Kafka and Consumer Groups')
+        self.plan(start, path_title='Kafka and Consumer Groups')
+        with self.assertRaises(runtime.LearningError):
+            self.plan(start, path_title='Changed title on retry')
+
+    def test_existing_path_receives_title_during_next_lesson_without_rewriting_history(self):
+        start = self.start()
+        self.plan(start)  # Old client publication without title metadata.
+        first = self.lesson(start)['lesson']
+        self.call('course_position', context_id=start['context_id'], lesson_key='first', completed=['first'])
+        job = self.call('course_generate', context_id=start['context_id'], request_id='second', lesson_key='second')
+        current = {**start, **job}
+        self.lesson(current, lesson_key='second', path_title='Building a Job Queue')
+        course = self.read(start)
+        self.assertEqual(course['track']['title'], 'Building a Job Queue')
+        self.assertEqual(course['lessons'][0], first)
+        self.assertEqual(course['position']['completed'], ['first'])
+        self.lesson(current, lesson_key='second', path_title='Building a Job Queue')
+        with self.assertRaises(runtime.LearningError):
+            self.lesson(current, lesson_key='second', path_title='Something unrelated')
+
+    def test_path_title_cannot_be_published_by_stopped_or_foreign_generation(self):
+        start = self.start()
+        other = self.start('other')
+        with self.assertRaises(runtime.LearningError):
+            self.plan({**start, 'job_id': other['job_id']}, path_title='Wrong path')
+        self.call('course_job_status', context_id=start['context_id'], job_id=start['job_id'], status='stopped')
+        with self.assertRaises(runtime.LearningError):
+            self.plan(start, path_title='Stopped path')
+        self.assertEqual(self.read(start)['track']['title'], 'Learn queues')
+
+    def test_invalid_title_rolls_back_publication_and_whitespace_is_normalized(self):
+        start = self.start()
+        for title in ('', '   ', 'x' * 101):
+            with self.subTest(title=title), self.assertRaises(runtime.LearningError):
+                self.plan(start, path_title=title)
+        self.assertEqual(self.read(start)['outline'], [])
+        self.plan(start, path_title='  Queue\n  Fundamentals  ')
+        self.assertEqual(self.read(start)['track']['title'], 'Queue Fundamentals')
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

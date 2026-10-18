@@ -8,6 +8,8 @@ Use the same source material and learner messages when comparing model/provider 
 
 Live teaching checks require the actual Hermes agent with the bundled teaching skills. Use an isolated profile and only the learning toolset. Keep a provider run bounded by time and tool turns. Inspect the transcript together with the resulting records; an appealing final answer can conceal incorrect tool calls.
 
+For generated lessons, use the separate [lesson quality benchmark](lesson-quality/README.md): fixed learner cases and sources, repeated baseline/candidate samples, and blinded human review. Its offline helper makes no model calls and does not measure learning. Keep generated-lesson review distinct from these conversation and tool-contract checks.
+
 The [16 October 2026 baseline/final comparison](live-tutoring-2026-10-16.md) records four successful live conversations covering direct explanation and generated-help capture. The remaining cases below are an evaluation checklist, not claimed completed experiments.
 
 ## Conversation cases

@@ -38,6 +38,8 @@ class AdapterTests(unittest.TestCase):
             ctx.tools['learning_course_read']['handler']({'track_id': 'track'})
             self.assertEqual(dispatch.call_args.kwargs['channel'], 'chat_relayed')
         lesson_tool = ctx.tools['learning_course_lesson']
+        self.assertIn('path_title', ctx.tools['learning_course_plan']['schema']['parameters']['required'])
+        self.assertNotIn('path_title', self.plugin.runtime.parameters('course_plan')['required'])
         self.assertIn('teaching', lesson_tool['schema']['parameters']['required'])
         self.assertIn('practice', lesson_tool['schema']['parameters']['required'])
         with patch.object(self.plugin.runtime, 'action') as dispatch:

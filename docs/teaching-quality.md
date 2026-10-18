@@ -1,6 +1,6 @@
 # Teaching quality and Humanizer integration
 
-The plugin bundles its own teaching and clear-prose skills. Generation prompts include the essential lesson rules directly and ask the model to load the skills when available. Structured payload validation and simulated UI tests verify contracts; they do not establish model adherence, factual accuracy, or learning effectiveness.
+The plugin bundles its own teaching and clear-prose skills plus three original reference lessons. Generation prompts include the essential lesson and prose rules directly and ask the model to load the skills and relevant reference when available. Structured payload validation and simulated UI tests verify contracts; they do not establish model adherence, factual accuracy, or learning effectiveness.
 
 ## Integration contract
 
@@ -45,6 +45,14 @@ Preferred feedback:
 > You assumed the first request failed because the client timed out. The server may already have completed it. Trace what a retry would do in that case.
 
 New lessons offer one small optional practice task aligned with the lesson outcome. It has its own answer and feedback area inside the lesson, separate from tutor chat. Learners can skip, use hints, reveal the explanation, retry, or explicitly bring the exercise into chat. A chat answer is not silently saved as an assessed attempt. Reading and assisted completion are not evidence of independent mastery.
+
+Prefer a meaningful changed condition in practice so learners apply the mechanism rather than copy a worked answer. Honor an explicit no-exercise request with `practice:null`. Completeness depends on whether the explanation enables the stated outcome, not on a minimum length. Keep concrete examples, intermediate reasoning and important limits; remove sections that merely repeat them. Existing saved lessons, Markdown rendering and navigation remain unchanged.
+
+## Reference lessons and quality benchmark
+
+The teaching skill links complete examples for a [beginner concept](../skills/teach/references/beginner-concept.md), [code walkthrough](../skills/teach/references/code-walkthrough.md) and [project milestone](../skills/teach/references/project-milestone.md). Each includes a weak approach, a usable payload and reviewer notes. These are original fictional teaching fixtures, not topic sources or evidence of model performance. The release packager includes all three resources.
+
+Use the [generated lesson benchmark](evaluations/lesson-quality/README.md) for fixed cases, source fixtures, capture metadata and blinded human comparison. `dev/lesson_quality.py` fingerprints authoring inputs and prepares review sheets from saved outputs without calling a model. Keep factual defects separate from editorial ratings and evaluate learning with independent/delayed tasks separately. Neither an offline tooling pass nor a favorable prose review proves learning gains.
 
 ## Review checklist
 

@@ -111,8 +111,8 @@ SPECS.update({
     'course_generate': ({**CONTEXT, 'request_id': ID, 'lesson_key': string(80)}, ['context_id', 'request_id']),
     'course_bind': ({**CONTEXT, 'session_id': string(200), 'scope': string(2000), 'model': MODEL_SELECTION}, ['context_id', 'session_id', 'scope']),
     'course_position': ({**CONTEXT, 'lesson_key': string(80), 'completed': array(string(80), 50)}, ['context_id', 'lesson_key']),
-    'course_plan': ({**CONTEXT, 'job_id': ID, 'summary': string(12000), 'assumptions': array(string(1000), 30), 'lessons': array(LESSON_OUTLINE, 50)}, ['context_id', 'job_id', 'summary', 'assumptions', 'lessons']),
-    'course_lesson': ({**CONTEXT, 'job_id': ID, 'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL, **LESSON_DETAILS}, ['context_id', 'job_id', 'lesson_key', 'content', 'source_ids']),
+    'course_plan': ({**CONTEXT, 'job_id': ID, 'path_title': string(100), 'summary': string(12000), 'assumptions': array(string(1000), 30), 'lessons': array(LESSON_OUTLINE, 50)}, ['context_id', 'job_id', 'summary', 'assumptions', 'lessons']),
+    'course_lesson': ({**CONTEXT, 'job_id': ID, 'path_title': string(100), 'lesson_key': string(80), 'content': string(50000), 'source_ids': array(ID, 30), 'visual': VISUAL, **LESSON_DETAILS}, ['context_id', 'job_id', 'lesson_key', 'content', 'source_ids']),
     'course_job_status': ({**CONTEXT, 'job_id': ID, 'status': enum('stopped', 'failed'), 'error': string(2000, 0)}, ['context_id', 'job_id', 'status']),
 })
 

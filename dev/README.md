@@ -28,6 +28,8 @@ The API base is `/api/plugins/hermes-learning`. Reads include `/state`, `/track/
 
 `dev/check-integrated.mjs` exercises the current primary interface: multiple files and an unsupported PDF, an unread link, first-lesson generation, inline chat, next-lesson generation, read markers, reload/Continue with history, tutor visibility, and mobile dark-mode draft preservation. It checks console/page errors and horizontal overflow and captures screenshots outside the repository.
 
+The integrated check also returns to the saved-path list during generation, verifies the saved title and original-request description, and checks title persistence after reload. The preview supplies the fixed title “Queue Fundamentals”; it verifies persistence and rendering, not AI naming quality. Real model generation supplies `path_title` with the outline, or with the next lesson for an older unnamed path. Titles are at most 100 characters and generated once per path; opening an older path alone does not start a naming call or rewrite its saved name.
+
 Start an isolated preview first. The check creates a new path in its store, so use disposable test data. Bring an existing Playwright installation; none is bundled with the plugin.
 
 ```sh
@@ -102,6 +104,8 @@ node spikes/001-cross-client-learning/tests/check_recovery.cjs
 Backend tests cover course revisions, proposal authorization/idempotency and stale application, course job authorization/idempotency, publication and source boundaries, legacy evidence, context revocation, concurrent startup, and restoration. UI unit tests cover input limits, inert Markdown rendering, host transport lifecycle, session identity/history, permission handling, interruption, and uncertain delivery without replay. Preview HTTP tests cover authentication, origin/Host checks, action envelopes, routes, and static path restrictions.
 
 `dev/evaluate.py` checks deterministic tool/record scenarios, not teaching quality. Live-model evaluation and its limits are documented in [the evaluation guide](../docs/evaluations/tutoring.md). Keep simulated UI checks, real-host integration, and model-quality evidence distinct when reporting results.
+
+`dev/lesson_quality.py fingerprint` prints hashes of current authoring guidance and the fixed lesson cases. Its `compare` command prepares blinded review sheets from saved baseline/candidate lessons; it makes no model calls. See the [lesson quality benchmark](../docs/evaluations/lesson-quality/README.md) for capture format, repeatable source fixtures, human rubric and limitations. Keep capture files and reviewer keys outside the repository.
 
 ## Rich lesson rendering checks
 

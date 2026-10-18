@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "source_policy": "All excerpts below are original synthetic teaching fixtures, not claims about an external service. Supply them verbatim in both variants. Keep review_checks out of model prompts.",
+  "cases": [
+    {
+      "id": "queue-beginner",
+      "level": "beginner",
+      "intent": "topic",
+      "request": "Teach me how a first-in-first-out queue changes when tasks arrive and leave. I know what a list is. Use a worked example and one optional task.",
+      "sources": [],
+      "review_checks": ["Show intermediate queue states, including removal from the front and addition at the back.", "Define FIFO before using it; keep one observable outcome.", "Change the input sequence in practice; do not ask for a copied definition."]
+    },
+    {
+      "id": "binary-search-trace",
+      "level": "intermediate",
+      "intent": "topic",
+      "request": "Teach me to trace binary search in Python using a half-open interval [lo, hi). Show a found target and explain termination. Give one optional changed-case task; do not execute code.",
+      "sources": [],
+      "review_checks": ["State that the input is sorted.", "Keep the half-open interval convention consistent in code, trace and explanation.", "Show lo, hi, mid and the retained interval; explain why bounds make progress.", "Practice must have a correct reference trace; no invented execution claims."]
+    },
+    {
+      "id": "queue-project-continuity",
+      "level": "intermediate",
+      "intent": "project",
+      "request": "Continue the Python in-memory job queue from the supplied earlier milestone. Add a maximum of two total processing attempts per job. Preserve the same data and names; explain a concrete failure trace and how I can inspect the result. Offer an optional project task. Do not edit or run my project.",
+      "sources": [{"title": "Earlier milestone fixture", "locator": "original fixture: queue.py", "excerpt": "from collections import deque\n\npending = deque([{'id': 'A', 'attempts': 0}])\ncompleted = []\nfailed = []\n\ndef process(job):\n    if job['id'] == 'A':\n        raise RuntimeError('temporary failure')\n    return job['id']\n\ndef run_one():\n    job = pending.popleft()\n    result = process(job)\n    completed.append(result)\n\n# Call run_one only when pending is nonempty. This fixture is in-memory, with one worker and no persistence guarantee."}],
+      "review_checks": ["Continue pending/completed/failed and the dictionary job shape.", "Increment attempts before each processing call, requeue the first failure and put the second in failed.", "Show expected queue state after both failures and avoid an infinite retry loop.", "Retain the in-memory, single-worker limits; expected behavior is not a test run."]
+    },
+    {
+      "id": "payment-timeout",
+      "level": "intermediate",
+      "intent": "topic",
+      "request": "I think a payment timeout proves the charge failed, so retrying with a new key is safe. Teach me why this reasoning might be wrong, using the supplied hypothetical provider contract and a worked timeline. Offer one optional changed-condition exercise.",
+      "sources": [{"title": "Hypothetical payment contract", "locator": "original fixture: contract section 1", "excerpt": "For 24 hours after successful completion, this hypothetical provider atomically deduplicates payment requests using the same key and identical parameters, returning the recorded result. It rejects changed parameters under a retained key. After 24 hours no deduplication guarantee applies. A new key identifies a new intended operation. A client timeout makes no statement about whether the charge committed."}],
+      "review_checks": ["Correct the stated misconception without empty praise.", "Separate server state from client knowledge in the timeline.", "Preserve atomicity, parameter matching and the 24-hour boundary.", "Do not infer that a duplicate is certain after expiry; only the guarantee ends."]
+    },
+    {
+      "id": "source-grounded-policy",
+      "level": "beginner",
+      "intent": "sources",
+      "request": "Using only the supplied fictional policy, teach me how to decide whether a purchase qualifies for reimbursement. Work through an example and offer an optional borderline case. Distinguish written policy from any interpretation.",
+      "sources": [{"title": "Fictional course policy", "locator": "original fixture: sections A-C", "excerpt": "A. Employees may request reimbursement for one course per calendar quarter, up to $200 inclusive of tax. B. The manager must approve the course in writing before purchase. C. Submit an itemized receipt within 30 calendar days of purchase. Meeting these conditions permits a request; it does not guarantee payment. No exceptions are specified here."}],
+      "review_checks": ["Preserve the cap, tax inclusion, quarterly limit, prior written approval and deadline.", "Distinguish permission to request from guaranteed payment.", "Name the source and locator without fabricating a URL or exceptions.", "Practice can be answered from the supplied policy."]
+    },
+    {
+      "id": "advanced-concise-explanation",
+      "level": "advanced",
+      "intent": "topic",
+      "request": "Explain in two concise paragraphs why a local database transaction cannot by itself atomically commit an email at a remote provider. I know ACID. Use one failure example and mention what an outbox does and does not solve. No exercise or quiz.",
+      "sources": [],
+      "review_checks": ["Respect two paragraphs and no exercise; practice:null is appropriate here.", "Avoid reteaching ACID or adding a forced introduction/summary.", "Explain the dual-write failure and that an outbox still needs retry/deduplication handling; do not promise exactly-once email delivery."]
+    }
+  ]
+}

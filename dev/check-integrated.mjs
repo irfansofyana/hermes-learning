@@ -23,7 +23,15 @@ await page.getByText('Choose a supported text, Markdown, or code file. PDF and i
 await page.getByRole('button',{name:'Add link',exact:true}).click();await page.getByLabel('Source or repository link').fill('https://invalid.example/repository');await page.getByRole('button',{name:'Add material',exact:true}).click();
 await page.getByText('Link · not read',{exact:true}).waitFor();
 await page.getByRole('button',{name:'Generate learning path',exact:true}).click();
+await page.getByRole('button',{name:'All learning paths',exact:true}).click();
+const savedPath=page.locator('.lw-path').filter({hasText:title});
+await savedPath.getByRole('heading',{name:'Queue Fundamentals',exact:true}).waitFor({timeout:15000});
+assert.equal(await savedPath.locator('p').innerText(),title,'The original request remains the description');
+await savedPath.scrollIntoViewIfNeeded();
+await page.screenshot({path:resolve(output,'saved-path-title-desktop.png')});
+await savedPath.click();
 await page.getByRole('heading',{name:'Understand the moving parts',exact:true}).waitFor({timeout:15000});
+await page.locator('.lw-outline').getByRole('heading',{name:'Queue Fundamentals',exact:true}).waitFor();
 await page.getByText('A queue holds tasks in the order they arrive.',{exact:false}).waitFor();
 assert.equal(await page.getByRole('button',{name:/learning records|continue in chat|prepare a tutor request/i}).count(),0,'Lessons must stay in the embedded tutor flow');
 await page.locator('.lw-thinking summary').first().click();
@@ -48,6 +56,7 @@ assert.equal(await page.locator('.lw-lesson-link.is-complete').count(),1,'Markin
 await page.getByText('2 lessons · 1 read',{exact:true}).waitFor();
 const before=await page.locator('.lw-message').count();assert.ok(before>=6);
 await page.reload();await page.getByRole('heading',{name:'What do you want to learn or build?'}).waitFor();
+await page.locator('.lw-path').filter({hasText:title}).getByRole('heading',{name:'Queue Fundamentals',exact:true}).waitFor();
 await page.locator('.lw-path').filter({hasText:title}).click();await page.getByRole('heading',{name:'Make one small change',exact:true}).waitFor({timeout:15000});assert.ok(await page.locator('.lw-message').count()>=before);
 await page.locator('.lw-thinking').first().waitFor();
 assert.ok(await page.locator('.lw-tool.is-finished').count()>=3,'Tool activity restores from history');
